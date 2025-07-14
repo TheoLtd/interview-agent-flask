@@ -1,6 +1,7 @@
-import json
-from flask import Blueprint, request, Response, jsonify, stream_with_context
-# import PyPDF2
+# import json
+# from flask import Blueprint
+# import datetime
+from flask import request, Response, jsonify, stream_with_context
 import pypdf
 import time
 import docx
@@ -8,15 +9,12 @@ from io import BytesIO
 from services.DeepSeek import DeepseekAPI
 from services.SparkPractice import AIPracticeAPI
 import os
-import datetime
+from . import practice_bp
 
-
-practice_bp = Blueprint('practice', __name__)
 
 @practice_bp.route('/answer', methods=['GET'])
 def handle_answer():
     user_message = request.args.get('page', default=1, type=str)
-    # user_message = request.json.get('message', '')
     if not user_message:
         return jsonify({'error': 'No message provided'}), 400
     
@@ -51,7 +49,7 @@ def handle_answer_v1():
             return jsonify({'content': res})
         else:
             return jsonify({'error': 'Deepseek API error'}), 500
-    
+
 
 @practice_bp.route('/evaluate', methods=['GET'])
 def evaluate():
@@ -75,6 +73,7 @@ def evaluate():
         else:
             return jsonify({'error': 'Deepseek API error'}), 500
 
+
 @practice_bp.route('/evaluate_v2', methods=['GET'])
 def evaluate_stream():
     history_data = request.args.get('historyData', default="", type=str)
@@ -82,7 +81,7 @@ def evaluate_stream():
         return jsonify({'error': 'No history_data provided'}), 400
     
     print(history_data)
-    prompt = '''请根据我的根据历史刷题记录分析我的薄弱环节、高频错误点，并给出针对性的提升策略（如重点练习哪些题型、时间管理建议等）。要求分析简洁清晰，建议可操作性强。
+    prompt = '''请根据我的历史刷题记录分析我的薄弱环节、高频错误点，并给出针对性的提升策略（如重点练习哪些题型、时间管理建议等）。要求分析简洁清晰，建议可操作性强。
                 以下是我的历史刷题记录：
                 <{}>
              '''.format(history_data)
@@ -121,7 +120,6 @@ def handle_resume():
     if file:
         content = ''
         if file.filename.endswith('.pdf'):
-            # pdf_reader = PyPDF2.PdfReader(BytesIO(file.read()))
             pdf_reader = pypdf.PdfReader(BytesIO(file.read()))
             for page in pdf_reader.pages:
                 content += page.extract_text() + '\n'
@@ -129,7 +127,7 @@ def handle_resume():
             doc = docx.Document(file)
             content = '\n'.join([para.text for para in doc.paragraphs])
         # 保存简历内容到本地文件
-        save_dir = os.path.join(os.path.dirname(__file__), '../resource/resume')
+        save_dir = os.path.join(os.path.dirname(__file__), '../../resource/resume')
         timestamp = int(time.time())
         filename = f"resume-{timestamp}.txt"
         filepath = os.path.join(save_dir, filename)
@@ -148,4 +146,4 @@ def handle_resume():
             else:
                 return jsonify({'error': 'Deepseek API error'}), 500
     
-    return jsonify({'error': 'Invalid file type. Only PDF files are allowed.'}), 400
+    return jsonify({'error': 'Invalid file type. Only PDF files are allowed.'}), 400 

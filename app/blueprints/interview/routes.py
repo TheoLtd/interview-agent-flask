@@ -1,59 +1,53 @@
+# import json
+# import docx
+# from io import BytesIO
+# from flask import Blueprint, logging, Response 
+# #  import PyPDF2
+# import pypdf
 import glob
-import json
 import os
 import subprocess
-from flask import Blueprint, logging, request, Response, jsonify, send_from_directory, stream_with_context
-# import PyPDF2
-import pypdf
+from flask import request, jsonify, send_from_directory, stream_with_context, current_app, session
 import time
-import docx
-from io import BytesIO
 from avatar import AipaasAuth
 from services.DeepSeek import DeepseekAPI
-from services.SparkPractice import AIPracticeAPI
+# from services.SparkPractice import AIPracticeAPI
 from avatar.AvatarWebSocket import avatarWebsocket
 from services.FaceDetect import facial_detect, add_arrays
 import threading
+from . import interview_bp
+from . import (
+    wsclient
+)
 
-interview_bp = Blueprint('interview', __name__)
 
-UPLOAD_FOLDER_FACE_ROUTE = 'resource/face_image/'
-hls_FOLDER_FILE = 'resource/stream/playlist.m3u8'
-FEEDBACK_FOLDER_ROUTE = 'resource/feedback/'
-user_info = {
-    "major": "",
-    "intention": "",
-    "job_description": "",
-    "deepseek_history": [],
-}
-facial_expression_list = [0,0,0,0,0,0,0,0]
-facial_expression_label = ["其他(非人脸表情图片)","其他表情","喜悦","愤怒","悲伤","惊恐","厌恶","中性"]
-wsclient = None
 
 @interview_bp.route('/init', methods=['POST'])
 def init():
-    global user_info
     data = request.get_json()
     major = data.get('major')
     intention = data.get('intention')
     job_description = data.get('job_description')
     if not all([major, intention, job_description]):
         return jsonify({'error': 'Missing required fields'}), 400
-    # 清空全局数据
-    user_info.clear()
-    user_info['major'] = major
-    user_info['intention'] = intention
-    user_info['job_description'] = job_description
-    # 初始化deepseek历史聊天记录结构
-    user_info['deepseek_history'] = []
-    print("user_info初始化:",user_info)
+    
+    # 在 session 中为该用户初始化信息
+    user_info = {
+        "major": major,
+        "intention": intention,
+        "job_description": job_description,
+        "deepseek_history": []
+    }
+    session['user_info'] = user_info
+    session['facial_expression_list'] = [0] * 8
+    
+    print("user_info初始化完成:", session['user_info'])
     return initdeepseek()
 
 
 
 @interview_bp.route('/image_detect', methods=['POST'])
 def image_detect():
-    global facial_expression_list
     if 'file' not in request.files:
         return jsonify({'error': 'No image part'}), 400
     file = request.files['file']
@@ -63,21 +57,30 @@ def image_detect():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     if file:
-        save_path = os.path.join(UPLOAD_FOLDER_FACE_ROUTE, file.filename+"_"+timestamp + '.jpg')
+        save_path = os.path.join(current_app.config['UPLOAD_FOLDER_FACE_ROUTE'], file.filename+"_"+timestamp + '.jpg')
         file.save(save_path)
         # if False:
         facial_expression = facial_detect(save_path)
+
+        # 从 session 获取并更新表情列表
+        facial_expression_list = session.get('facial_expression_list', [0] * 8)
         facial_expression_list = add_arrays(facial_expression_list, facial_expression)
+        session['facial_expression_list'] = facial_expression_list
+        
         return jsonify({'content': 'Success'})
     return jsonify({'error': 'Invalid file type. Only image files are allowed.'}), 400
 
 
 def initdeepseek():
-    global user_info
+    # 从 session 中获取用户信息
+    user_info = session.get('user_info')
+    if not user_info:
+        return jsonify({'error': 'User info not initialized in session'}), 400
+
     # 获取历史对话记录
     history = user_info.get('deepseek_history', [])
     # 读取 prompt.txt 内容
-    prompt_path = os.path.join('services', 'prompt.txt')
+    prompt_path = os.path.join(os.path.dirname(__file__), '../../../services', 'prompt.txt')
     try:
         with open(prompt_path, 'r', encoding='utf-8') as f:
             prompt = f.read()
@@ -108,6 +111,10 @@ def initdeepseek():
 
     except Exception as e:
         return jsonify({'error': f'Failed to call DeepseekAPI: {str(e)}'}), 500
+    
+    # 将更新后的用户信息存回 session
+    session['user_info'] = user_info
+    
     return jsonify({'content': second_response.content})
 
 
@@ -124,7 +131,11 @@ def send_text_in_thread(text):
 
 @interview_bp.route('/answer', methods=['GET'])
 def answer():
-    global user_info
+    # 从 session 中获取用户信息
+    user_info = session.get('user_info')
+    if not user_info:
+        return jsonify({'error': 'User info not initialized in session'}), 400
+
     # 获取历史对话记录
     user_message = request.args.get('message', default="", type=str)
     user_info['deepseek_history'].append({"role": "user", "content": user_message})
@@ -135,6 +146,10 @@ def answer():
             send_text_in_thread(response.content)
     except Exception as e:
         return jsonify({'error': f'Failed to call DeepseekAPI: {str(e)}'}), 500
+    
+    # 将更新后的用户信息存回 session
+    session['user_info'] = user_info
+
     return jsonify({'content': response.content})
 
 
@@ -144,7 +159,7 @@ def init_shuziren():
     global wsclient
     if wsclient is not None:
         print("启动process")
-        rtmp_to_hls(wsclient.streamUrl, hls_FOLDER_FILE)
+        rtmp_to_hls(wsclient.streamUrl, current_app.config['HLS_FOLDER_FILE'])
         return jsonify({'content': "true"})
     url = 'wss://avatar.cn-huadong-1.xf-yun.com/v1/interact'
     appId = 'a9730a45'
@@ -163,7 +178,7 @@ def init_shuziren():
             time.sleep(1)
             pass
         print(wsclient.streamUrl)
-        rtmp_to_hls(wsclient.streamUrl, hls_FOLDER_FILE)
+        rtmp_to_hls(wsclient.streamUrl, current_app.config['HLS_FOLDER_FILE'])
         return jsonify({'content': "true"})
 
     except Exception as e:
@@ -175,12 +190,12 @@ def init_shuziren():
 def rtmp_to_hls(input_rtmp_url, output_hls_path):
     """
     将 RTMP 流转换为 HLS 格式
-    
+
     参数:
         input_rtmp_url: 输入RTMP地址 (e.g. "rtmp://example.com/live/stream")
         output_hls_path: 输出HLS目录和文件名 (e.g. "static/stream/playlist.m3u8")
     """
-    
+
     ffmpeg_cmd = [
         'ffmpeg',
         '-i', input_rtmp_url,          # 输入源
@@ -200,7 +215,7 @@ def rtmp_to_hls(input_rtmp_url, output_hls_path):
             stderr=subprocess.PIPE,
             universal_newlines=True
         )
-                    
+
         return process
     except Exception as e:
         print(f"Error: {e}")
@@ -226,12 +241,16 @@ def del_wss():
 
 @interview_bp.route('/feedback', methods=['GET'])
 def feedback():
-    global user_info
+    # 从 session 中获取用户信息
+    user_info = session.get('user_info')
+    if not user_info:
+        return jsonify({'error': 'User info not initialized in session'}), 400
+        
     if len(user_info['deepseek_history'])<=3:
         return jsonify({'error': 'no history'}), 500
-    
+
     # 读取 prompt.txt 内容
-    prompt_path = os.path.join('services', 'feedbackPrompt.txt')
+    prompt_path = os.path.join(os.path.dirname(__file__), '../../../services', 'feedbackPrompt.txt')
     try:
         with open(prompt_path, 'r', encoding='utf-8') as f:
             prompt = f.read()
@@ -244,7 +263,7 @@ def feedback():
             print(response.content)
             timestamp = int(time.time())
             filename = f"feedback-{timestamp}.txt"
-            filepath = os.path.join(FEEDBACK_FOLDER_ROUTE, filename)
+            filepath = os.path.join(current_app.config['FEEDBACK_FOLDER_ROUTE'], filename)
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(response.content)
     except Exception as e:
@@ -253,20 +272,29 @@ def feedback():
 
 @interview_bp.route('/feedback2', methods=['GET'])
 def feedback2():
-    global user_info
-    txt_files = glob.glob(os.path.join(FEEDBACK_FOLDER_ROUTE, "*.txt"))
-    
+    # 从 session 获取用户信息和表情列表
+    user_info = session.get('user_info', {})
+    facial_expression_list = session.get('facial_expression_list', [])
+
+    txt_files = glob.glob(os.path.join(current_app.config['FEEDBACK_FOLDER_ROUTE'], "*.txt"))
+
     if not txt_files:
-        return jsonify({'error': 'no feedback record'}), 500
-    
-    latest_file = max(txt_files, key=os.path.getmtime)
-    print(latest_file)
-    try:
-        with open(latest_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except Exception as e:
-        return jsonify({'error': f'Failed to read feedback.txt: {str(e)}'}), 500
-    return jsonify({'content': content})
+        return "No feedback files found."
+
+    latest_file = max(txt_files, key=os.path.getctime)
+
+    with open(latest_file, 'r', encoding='utf-8') as f:
+        feedback_content = f.read()
+
+    response = f"""
+    <p><strong>面试反馈:</strong></p>
+    <p>{feedback_content}</p>
+    <p><strong>major:</strong> {user_info.get('major', 'N/A')}</p>
+    <p><strong>intention:</strong> {user_info.get('intention', 'N/A')}</p>
+    <p><strong>job_description:</strong> {user_info.get('job_description', 'N/A')}</p>
+    <p><strong>facial_expression_list:</strong> {facial_expression_list}</p>
+    """
+    return response
 
 
 def delete_files_in_folder(folder_path):
@@ -274,6 +302,3 @@ def delete_files_in_folder(folder_path):
     for f in files:
         if os.path.isfile(f):
             os.remove(f)
-
-   
-   

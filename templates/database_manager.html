@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>数据库管理器</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/database_manager.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>数据库管理器</h1>
+        <p>选择表并管理数据</p>
+      </div>
+
+      <div class="content">
+        <div class="table-selector">
+          <h3>选择数据表</h3>
+          <div class="table-list" id="tableList">
+            {% if tables %} {% for table in tables %}
+            <div class="table-item" data-table="{{ table[0] }}">
+              {{ table[0] }}
+            </div>
+            {% endfor %} {% else %}
+            <div class="no-tables">
+              <p>没有找到任何表</p>
+              <p>请检查数据库连接和interview数据库中是否有表</p>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button class="btn btn-primary" onclick="loadTableData()">
+            加载数据
+          </button>
+          <button class="btn btn-success" onclick="showInsertModal()">
+            添加记录
+          </button>
+          <button class="btn btn-warning" onclick="showUpdateModal()">
+            修改记录
+          </button>
+          <button class="btn btn-danger" onclick="deleteSelectedRecord()">
+            删除记录
+          </button>
+        </div>
+
+        <div id="message"></div>
+
+        <!-- 搜索和分页控制 -->
+        <div
+          class="search-pagination-controls"
+          id="searchControls"
+          style="display: none"
+        >
+          <div class="search-section">
+            <div class="search-inputs">
+              <input
+                type="text"
+                id="searchInput"
+                placeholder="搜索关键词..."
+                class="search-input"
+              />
+              <select id="searchColumn" class="search-select">
+                <option value="">所有列</option>
+              </select>
+              <button class="btn btn-primary" onclick="performSearch()">
+                搜索
+              </button>
+              <button class="btn btn-secondary" onclick="clearSearch()">
+                清除
+              </button>
+            </div>
+          </div>
+
+          <div class="pagination-section">
+            <div class="pagination-info">
+              <span id="paginationInfo">显示 0-0 条，共 0 条记录</span>
+            </div>
+            <div class="pagination-controls">
+              <button
+                class="btn btn-sm btn-primary"
+                onclick="changePage(1)"
+                id="firstPage"
+              >
+                首页
+              </button>
+              <button
+                class="btn btn-sm btn-primary"
+                onclick="changePage(currentPage - 1)"
+                id="prevPage"
+              >
+                上一页
+              </button>
+              <span id="pageNumbers" class="page-numbers"></span>
+              <button
+                class="btn btn-sm btn-primary"
+                onclick="changePage(currentPage + 1)"
+                id="nextPage"
+              >
+                下一页
+              </button>
+              <button
+                class="btn btn-sm btn-primary"
+                onclick="changePage(totalPages)"
+                id="lastPage"
+              >
+                末页
+              </button>
+            </div>
+            <div class="per-page-control">
+              <label>每页显示:</label>
+              <select id="perPageSelect" onchange="changePerPage()">
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="data-section">
+          <div id="dataContainer">
+            <div class="loading">请选择一个表并点击"加载数据"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 插入记录模态框 -->
+    <div id="insertModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeModal('insertModal')">&times;</span>
+        <h2>添加新记录</h2>
+
+        <!-- 输入模式切换 -->
+        <div class="input-mode-switch">
+          <button
+            type="button"
+            class="btn btn-sm btn-primary active"
+            onclick="switchInputMode('single')"
+            id="singleModeBtn"
+          >
+            单条输入
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-info"
+            onclick="switchInputMode('batch')"
+            id="batchModeBtn"
+          >
+            批量输入
+          </button>
+        </div>
+
+        <!-- 单条输入模式 -->
+        <div id="singleInputMode">
+          <form id="insertForm">
+            <div class="form-fields-container">
+              <div id="insertFields"></div>
+            </div>
+            <div style="margin-top: 20px">
+              <button type="submit" class="btn btn-success">保存</button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                onclick="closeModal('insertModal')"
+              >
+                取消
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 批量输入模式 -->
+        <div id="batchInputMode" style="display: none">
+          <div class="batch-input-container">
+            <div class="batch-input-info">
+              <h4>批量输入说明：</h4>
+              <ul>
+                <li>每行输入一条记录的所有字段值</li>
+                <li>字段值之间用制表符(Tab)或逗号分隔</li>
+                <li>支持复制粘贴Excel数据</li>
+                <li>第一行可以包含字段名（可选）</li>
+              </ul>
+            </div>
+            <div class="batch-input-field">
+              <label>批量数据：</label>
+              <textarea
+                id="batchInputData"
+                rows="10"
+                placeholder="请输入数据，每行一条记录..."
+              ></textarea>
+            </div>
+            <div class="batch-input-preview">
+              <h4>数据预览：</h4>
+              <div id="batchPreview"></div>
+            </div>
+            <div style="margin-top: 20px">
+              <button
+                type="button"
+                class="btn btn-info"
+                onclick="previewBatchData()"
+              >
+                预览数据
+              </button>
+              <button
+                type="button"
+                class="btn btn-success"
+                onclick="submitBatchData()"
+              >
+                批量保存
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                onclick="closeModal('insertModal')"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 更新记录模态框 -->
+    <div id="updateModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeModal('updateModal')">&times;</span>
+        <h2>修改记录</h2>
+        <form id="updateForm">
+          <div class="form-fields-container">
+            <div id="updateFields"></div>
+          </div>
+          <div style="margin-top: 20px">
+            <button type="submit" class="btn btn-success">保存</button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              onclick="closeModal('updateModal')"
+            >
+              取消
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/database_manager.js') }}"></script>
+  </body>
+</html>
