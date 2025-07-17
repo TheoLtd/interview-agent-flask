@@ -1,0 +1,2 @@
+[hls muxer @ 000001e2467bbf40] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist0.ts: No such file or directory
+[hls muxer @ 000001e2467bbf40] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist1.ts: No such file or directory

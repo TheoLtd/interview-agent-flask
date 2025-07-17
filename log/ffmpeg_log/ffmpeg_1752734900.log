@@ -1,0 +1,73 @@
+ffmpeg version 2025-07-12-git-35a6de137a-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers
+  built with gcc 15.1.0 (Rev6, Built by MSYS2 project)
+  configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-fontconfig --enable-iconv --enable-gnutls --enable-lcms2 --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-libsnappy --enable-zlib --enable-librist --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-libbluray --enable-libcaca --enable-libdvdnav --enable-libdvdread --enable-sdl2 --enable-libaribb24 --enable-libaribcaption --enable-libdav1d --enable-libdavs2 --enable-libopenjpeg --enable-libquirc --enable-libuavs3d --enable-libxevd --enable-libzvbi --enable-liboapv --enable-libqrencode --enable-librav1e --enable-libsvtav1 --enable-libvvenc --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxavs2 --enable-libxeve --enable-libxvid --enable-libaom --enable-libjxl --enable-libvpx --enable-mediafoundation --enable-libass --enable-frei0r --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-liblensfun --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-libshaderc --enable-vulkan --enable-libplacebo --enable-opencl --enable-libcdio --enable-openal --enable-libgme --enable-libmodplug --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libshine --enable-libtheora --enable-libtwolame --enable-libvo-amrwbenc --enable-libcodec2 --enable-libilbc --enable-libgsm --enable-liblc3 --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-ladspa --enable-libbs2b --enable-libflite --enable-libmysofa --enable-librubberband --enable-libsoxr --enable-chromaprint
+  libavutil      60.  4.101 / 60.  4.101
+  libavcodec     62.  6.100 / 62.  6.100
+  libavformat    62.  1.103 / 62.  1.103
+  libavdevice    62.  0.100 / 62.  0.100
+  libavfilter    11.  1.101 / 11.  1.101
+  libswscale      9.  0.100 /  9.  0.100
+  libswresample   6.  0.100 /  6.  0.100
+Input #0, flv, from 'rtmp://srs-stream-huabei-1.xf-yun.com:19350/live/ase00017272dx1981724210ab826802':
+  Metadata:
+    |RtmpSampleAccess: true
+    encoder         : Lavf58.29.100
+    server          : SRS/5.0.210(Bee)
+    server_version  : 5.0.210
+  Duration: N/A, start: 0.000000, bitrate: 1069 kb/s
+  Stream #0:0: Data: none
+  Stream #0:1: Audio: aac (LC), 16000 Hz, mono, fltp, 69 kb/s
+  Stream #0:2: Video: h264 (Main), yuv420p(tv, bt709/unknown/unknown, progressive), 512x512, 1000 kb/s, 25 fps, 25 tbr, 1k tbn, start 0.064000
+Stream mapping:
+  Stream #0:2 -> #0:0 (h264 (native) -> h264 (libx264))
+  Stream #0:1 -> #0:1 (aac (native) -> aac (native))
+Press [q] to stop, [?] for help
+[libx264 @ 0000023a1c2aa880] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2
+[libx264 @ 0000023a1c2aa880] profile High, level 3.0, 4:2:0, 8-bit
+[libx264 @ 0000023a1c2aa880] 264 - core 165 r3222 b35605a - H.264/MPEG-4 AVC codec - Copyleft 2003-2025 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=16 lookahead_threads=2 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, hls, to 'e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\app\resource\stream\playlist.m3u8':
+  Metadata:
+    |RtmpSampleAccess: true
+    server_version  : 5.0.210
+    server          : SRS/5.0.210(Bee)
+    encoder         : Lavf62.1.103
+  Stream #0:0: Video: h264, yuv420p(tv, bt709/unknown/unknown, progressive), 512x512, q=2-31, 25 fps, 90k tbn
+    Metadata:
+      encoder         : Lavc62.6.100 libx264
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+  Stream #0:1: Audio: aac (LC), 16000 Hz, mono, fltp, 69 kb/s
+    Metadata:
+      encoder         : Lavc62.6.100 aac
+frame=    0 fps=0.0 q=0.0 size=N/A time=N/A bitrate=N/A dup=2 drop=0 speed=N/A elapsed=0:00:00.51    frame=    0 fps=0.0 q=0.0 size=N/A time=N/A bitrate=N/A dup=2 drop=0 speed=N/A elapsed=0:00:01.02    frame=   11 fps=7.2 q=28.0 size=N/A time=00:00:00.36 bitrate=N/A dup=2 drop=0 speed=0.234x elapsed=0:00:01.53    frame=   20 fps=9.7 q=28.0 size=N/A time=00:00:00.72 bitrate=N/A dup=2 drop=0 speed=0.348x elapsed=0:00:02.06    frame=   31 fps= 12 q=28.0 size=N/A time=00:00:01.16 bitrate=N/A dup=2 drop=0 speed=0.449x elapsed=0:00:02.58    frame=   49 fps= 16 q=28.0 size=N/A time=00:00:01.88 bitrate=N/A dup=2 drop=0 speed=0.608x elapsed=0:00:03.09    frame=   59 fps= 16 q=28.0 size=N/A time=00:00:02.28 bitrate=N/A dup=2 drop=0 speed=0.632x elapsed=0:00:03.60    frame=   68 fps= 16 q=28.0 size=N/A time=00:00:02.64 bitrate=N/A dup=2 drop=0 speed=0.64x elapsed=0:00:04.12    frame=   88 fps= 19 q=28.0 size=N/A time=00:00:03.44 bitrate=N/A dup=2 drop=0 speed=0.742x elapsed=0:00:04.63    frame=   97 fps= 19 q=28.0 size=N/A time=00:00:03.80 bitrate=N/A dup=2 drop=0 speed=0.737x elapsed=0:00:05.15    frame=  107 fps= 19 q=28.0 size=N/A time=00:00:04.20 bitrate=N/A dup=2 drop=0 speed=0.741x elapsed=0:00:05.66    frame=  126 fps= 20 q=28.0 size=N/A time=00:00:04.96 bitrate=N/A dup=2 drop=0 speed=0.803x elapsed=0:00:06.17    frame=  136 fps= 20 q=28.0 size=N/A time=00:00:05.36 bitrate=N/A dup=2 drop=0 speed=0.801x elapsed=0:00:06.69    frame=  145 fps= 20 q=28.0 size=N/A time=00:00:05.72 bitrate=N/A dup=2 drop=0 speed=0.792x elapsed=0:00:07.22    frame=  164 fps= 21 q=28.0 size=N/A time=00:00:06.48 bitrate=N/A dup=2 drop=0 speed=0.838x elapsed=0:00:07.72    frame=  174 fps= 21 q=28.0 size=N/A time=00:00:06.88 bitrate=N/A dup=2 drop=0 speed=0.835x elapsed=0:00:08.24    frame=  184 fps= 21 q=28.0 size=N/A time=00:00:07.28 bitrate=N/A dup=2 drop=0 speed=0.831x elapsed=0:00:08.75    frame=  203 fps= 22 q=28.0 size=N/A time=00:00:08.04 bitrate=N/A dup=2 drop=0 speed=0.866x elapsed=0:00:09.28    frame=  212 fps= 22 q=28.0 size=N/A time=00:00:08.40 bitrate=N/A dup=2 drop=0 speed=0.857x elapsed=0:00:09.79    frame=  222 fps= 22 q=28.0 size=N/A time=00:00:08.80 bitrate=N/A dup=2 drop=0 speed=0.853x elapsed=0:00:10.31    frame=  241 fps= 22 q=28.0 size=N/A time=00:00:09.56 bitrate=N/A dup=2 drop=0 speed=0.883x elapsed=0:00:10.82    [hls @ 0000023a1c17af40] Opening 'e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\app\resource\stream\playlist0.ts' for writing
+[hls @ 0000023a1c17af40] Failed to open file 'e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\app\resource\stream\playlist0.ts'
+[vost#0:0/libx264 @ 0000023a1c17b200] Error submitting a packet to the muxer: No such file or directory
+    Last message repeated 1 times
+[out#0/hls @ 0000023a1bbf4dc0] Error muxing a packet
+[out#0/hls @ 0000023a1bbf4dc0] Task finished with error code: -2 (No such file or directory)
+[out#0/hls @ 0000023a1bbf4dc0] Terminating thread with return code -2 (No such file or directory)
+[hls @ 0000023a1c17af40] Opening 'e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\app\resource\stream\playlist0.ts' for writing
+[hls @ 0000023a1c17af40] Failed to open file 'e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\app\resource\stream\playlist0.ts'
+[hls @ 0000023a1c17af40] Opening 'e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\app\resource\stream\playlist.m3u8.tmp' for writing
+[out#0/hls @ 0000023a1bbf4dc0] video:402KiB audio:1KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+frame=  251 fps= 22 q=-1.0 Lsize=N/A time=00:00:09.96 bitrate=N/A dup=2 drop=0 speed=0.858x elapsed=0:00:11.60    
+[libx264 @ 0000023a1c2aa880] frame I:2     Avg QP:15.88  size: 12772
+[libx264 @ 0000023a1c2aa880] frame P:88    Avg QP:20.30  size:  4328
+[libx264 @ 0000023a1c2aa880] frame B:236   Avg QP:23.28  size:   534
+[libx264 @ 0000023a1c2aa880] consecutive B-frames:  2.8%  1.8%  0.9% 94.5%
+[libx264 @ 0000023a1c2aa880] mb I  I16..4: 51.3% 22.3% 26.4%
+[libx264 @ 0000023a1c2aa880] mb P  I16..4:  4.1%  3.3%  0.7%  P16..4: 26.6% 10.3%  5.7%  0.0%  0.0%    skip:49.3%
+[libx264 @ 0000023a1c2aa880] mb B  I16..4:  0.1%  0.1%  0.0%  B16..8: 23.6%  1.0%  0.2%  direct: 1.0%  skip:74.1%  L0:45.2% L1:49.7% BI: 5.1%
+[libx264 @ 0000023a1c2aa880] 8x8 transform intra:37.4% inter:59.4%
+[libx264 @ 0000023a1c2aa880] coded y,uvDC,uvAC intra: 23.2% 33.8% 11.4% inter: 6.0% 5.2% 0.1%
+[libx264 @ 0000023a1c2aa880] i16 v,h,dc,p: 76% 16%  7%  1%
+[libx264 @ 0000023a1c2aa880] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu:  7%  6% 76%  1%  3%  3%  2%  1%  1%
+[libx264 @ 0000023a1c2aa880] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 11% 10% 13%  4% 29% 13% 14%  4%  4%
+[libx264 @ 0000023a1c2aa880] i8c dc,h,v,p: 62% 15% 20%  3%
+[libx264 @ 0000023a1c2aa880] Weighted P-Frames: Y:0.0% UV:0.0%
+[libx264 @ 0000023a1c2aa880] ref P L0: 60.3% 11.5% 18.5%  9.6%
+[libx264 @ 0000023a1c2aa880] ref B L0: 93.1%  5.2%  1.7%
+[libx264 @ 0000023a1c2aa880] ref B L1: 97.5%  2.5%
+[libx264 @ 0000023a1c2aa880] kb/s:326.61
+[aac @ 0000023a1c173700] Qavg: 65536.000
+Conversion failed!

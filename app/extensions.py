@@ -74,6 +74,7 @@ class DatabaseManager:
                     result = cursor.fetchone()
                     
                     if not result:
+                        print("❌ 数据库 'interview' 不存在")
                         # 创建interview数据库
                         cursor.execute("CREATE DATABASE interview CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
                         print("✅ 数据库 'interview' 创建成功")
@@ -91,7 +92,6 @@ class DatabaseManager:
         return self.pool.connection()
     
     def get_connection_context(self):
-        """获取支持上下文管理器的PyMySQL连接"""
         if not self._initialized:
             raise RuntimeError("DatabaseManager not initialized")
         return self.pool.connection()

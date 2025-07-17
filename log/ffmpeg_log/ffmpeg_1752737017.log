@@ -1,0 +1,3 @@
+[in#0/flv @ 00000143f0c508c0] Error during demuxing: I/O error
+[hls muxer @ 00000143f151bc40] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist1.ts: No such file or directory
+[hls muxer @ 00000143f151bc40] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist2.ts: No such file or directory

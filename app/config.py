@@ -1,15 +1,6 @@
 import os
 
 
-PYMYSQL_CONFIG={
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'nobody',
-    'password': '0000',
-    'database': 'interview',
-    'charset': 'utf8mb4'
-}
-
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key'
     
@@ -43,3 +34,13 @@ class Config:
         "其他(非人脸表情图片)", "其他表情", "喜悦", "愤怒",
         "悲伤", "惊恐", "厌恶", "中性"
     ]
+    
+    # 数字人配置
+    AVATER_CONFIG = {
+        'url': 'wss://avatar.cn-huadong-1.xf-yun.com/v1/interact',
+        'appId': 'db4f89ef',
+        'appKey': '53aa48c511bcb1cedc81fe7702342e1f',
+        'appSecret': 'ZDIwNzBiZmVlZmQyNGVkYzE4YWUyMDcx',
+        'anchorId': 'cnr5dg8n2000000003',
+        'vcn': 'x4_xiaozhong'
+    }
