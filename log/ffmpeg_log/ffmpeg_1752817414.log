@@ -1,0 +1,5 @@
+[hls muxer @ 0000026d8b5ebec0] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist15.ts: No such file or directory
+[hls muxer @ 0000026d8b5ebec0] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist16.ts: No such file or directory
+[hls muxer @ 0000026d8b5ebec0] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist17.ts: No such file or directory
+[hls muxer @ 0000026d8b5ebec0] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist18.ts: No such file or directory
+[hls muxer @ 0000026d8b5ebec0] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist19.ts: No such file or directory

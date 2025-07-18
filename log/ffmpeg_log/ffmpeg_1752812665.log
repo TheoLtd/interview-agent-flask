@@ -1,0 +1,7 @@
+[hls muxer @ 0000019c0181c140] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist10.ts: No such file or directory
+[hls muxer @ 0000019c0181c140] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist11.ts: No such file or directory
+[hls muxer @ 0000019c0181c140] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist12.ts: No such file or directory
+[hls muxer @ 0000019c0181c140] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist13.ts: No such file or directory
+[in#0/flv @ 0000019c7fa208c0] Error during demuxing: I/O error
+[hls muxer @ 0000019c0181c140] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist16.ts: No such file or directory
+[hls muxer @ 0000019c0181c140] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist17.ts: No such file or directory

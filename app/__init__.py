@@ -73,7 +73,12 @@ def create_app():
     #     werkzeug_logger = logging.getLogger('werkzeug')
     #     werkzeug_logger.disabled = True
 
-    CORS(app, supports_credentials=True)  # 启用跨源资源共享，并允许携带凭证
+    CORS(app, 
+         supports_credentials=True,  # 启用跨源资源共享，并允许cookie
+         origins=["*"],  # 允许所有来源
+         allow_headers=["Content-Type", "Authorization", "Cookie"],
+         expose_headers=["Set-Cookie"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
     # 从文件读取flask配置
     app.config.from_object(Config)
