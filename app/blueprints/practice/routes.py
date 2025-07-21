@@ -8,6 +8,7 @@ import docx
 from io import BytesIO
 from services.DeepSeek import DeepseekAPI
 from services.SparkPractice import AIPracticeAPI
+from services.SparkMbti import AIMbtiAPI
 import os
 from . import practice_bp
 
@@ -146,4 +147,27 @@ def handle_resume():
             else:
                 return jsonify({'error': 'Deepseek API error'}), 500
     
-    return jsonify({'error': 'Invalid file type. Only PDF files are allowed.'}), 400 
+    return jsonify({'error': 'Invalid file type. Only PDF files are allowed.'}), 400
+
+
+@practice_bp.route('/mbti_test', methods=['GET'])
+def mbti_test():
+    user_message = request.args.get('prompt', default="", type=str)
+    if not user_message:
+        return jsonify({'error': 'No message provided'}), 400
+
+    # 构造MBTI测试prompt
+    mbti_prompt = f"""你是一名专业心理测评师，请根据通过给出用户适量问题(20道以下)和选项，用户给出答案，判断其可能的MBTI类型，并简要地表述用户适合的职业方向。必须按照以下建议输出用户的mbti类型(只有一个确切的答案)和简要理由:
+        ## 输出规则
+        1. **格式要求**：必须使用Markdown结构化输出
+        2. **长度控制**：总输出不超过200字
+        3. **内容分级**：按优先级标注（mbti类型, 简单的性格分析, 适合的职业）
+    """
+
+    AIMbti = AIMbtiAPI.getInstance()
+    res = AIMbti.get_answer(mbti_prompt)
+    print(res)
+    if res:
+        return jsonify({'content': res})
+    else:
+        return jsonify({'error': 'MBTI API error'}), 500

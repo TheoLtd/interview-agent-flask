@@ -46,8 +46,17 @@ class Config:
     }
     
     SPARK_PRACTICE_API = {
-        'url': 'https://xingchen-api.xf-yun.com/v1/chat/completions',
+        'host': 'xingchen-api.xf-yun.com',
+        'path': '/workflow/v1/chat/completions',
         'api_key': '253673d89c9e36cba2fb4aa83c30977a',
         'api_secret': 'ZTE0ZmU1MzNiZjlhNTgxNTExYWU3YTcw',
         'flow_id': '7347256464096796674'
+    }
+
+    SPARK_MBTI_API = {
+        "api_key": "0a87ff1a9bdeb34ce22139bce83bf698",
+        "api_secret": "ZDlkZDJiMjY0OWRjNzkzNTBlYmI5ZTY3",
+        'host': 'xingchen-api.xf-yun.com',
+        'path': '/workflow/v1/chat/completions',
+        "flow_id": "7348687728526802946"
     }
