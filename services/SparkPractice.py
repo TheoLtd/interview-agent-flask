@@ -1,15 +1,14 @@
 import http.client
 import json
+from flask import current_app
 
-API_KEY = "9f638064e25b1ae24d828e89c1b21026"
-API_SECRET = "Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3"
 
 # print("a")
-headers = {
-    "Content-Type": "application/json",
-    "Accept": "text/event-stream",
-    "Authorization": f"Bearer {API_KEY}:{API_SECRET}",
-}
+# headers = {
+#     "Content-Type": "application/json",
+#     "Accept": "text/event-stream",
+#     "Authorization": f"Bearer {API_KEY}:{API_SECRET}",
+# }
 
 
 class AIPracticeAPI():
@@ -17,11 +16,20 @@ class AIPracticeAPI():
 
     def __init__(self):
         self.name = "简历出题助手"
+    
     def get_answer(self, prompt, max_retries=1):
+        api_key = current_app.config['SPARK_PRACTICE_API']['api_key']
+        api_secret = current_app.config['SPARK_PRACTICE_API']['api_secret']
         
-        agent_client = http.client.HTTPSConnection("xingchen-api.xf-yun.com", timeout=120)
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            "Authorization": f"Bearer {api_key}:{api_secret}",
+        }
+        
+        agent_client = http.client.HTTPSConnection(current_app.config['SPARK_PRACTICE_API']['url'], timeout=120)
         data = {
-            "flow_id": "7341661804480536578",
+            "flow_id": current_app.config['SPARK_PRACTICE_API']['flow_id'],
             "uid": "123",
             "parameters": {"AGENT_USER_INPUT": prompt},
             "ext": {},
@@ -32,7 +40,8 @@ class AIPracticeAPI():
             "POST", "/workflow/v1/chat/completions", payload, headers, encode_chunked=True)
         res = agent_client.getresponse()
         data = res.readline()
-        print(data.decode("utf-8"))
+        # Remove the print statement that outputs conversation data to terminal
+        # print(data.decode("utf-8"))
         response_data = json.loads(data.decode("utf-8"))
         content = response_data["choices"][0]["delta"]["content"]
         return content

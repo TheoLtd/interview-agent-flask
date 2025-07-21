@@ -48,11 +48,11 @@ def log_to_chat_file(data_to_log):
 
 @interview_bp.route('/init', methods=['POST'])
 def init():
-    # 调试代码
-    print("=== 初始化调试信息 ===")
-    print("请求方法:", request.method)
-    print("Session ID:", session.get('_id', 'No session ID'))
-    print("Session内容:", dict(session))
+    # # 调试代码
+    # print("=== 初始化调试信息 ===")
+    # print("请求方法:", request.method)
+    # print("Session ID:", session.get('_id', 'No session ID'))
+    # print("Session内容:", dict(session))
     
     data = request.get_json()
     major = data.get('major')
@@ -71,10 +71,10 @@ def init():
     session['user_info'] = user_info
     session['facial_expression_list'] = [0] * 8
     
-    # 调试代码
-    print("设置Session后:")
-    print("Session内容:", dict(session))
-    print("User info:", session.get('user_info'))
+    # # 调试代码
+    # print("设置Session后:")
+    # print("Session内容:", dict(session))
+    # print("User info:", session.get('user_info'))
     
     # 为此会话创建日志文件
     log_dir = os.path.join(os.path.dirname(current_app.root_path), 'log', 'chat')
@@ -87,10 +87,10 @@ def init():
     
     response = initdeepseek()
     
-    # 调试代码：查看响应头中的cookie设置
-    print("=== 响应调试信息 ===")
-    print("响应状态码:", response.status_code if hasattr(response, 'status_code') else 'N/A')
-    print("响应头:", dict(response.headers) if hasattr(response, 'headers') else 'N/A')
+    # # 调试代码：查看响应头中的cookie设置
+    # print("=== 响应调试信息 ===")
+    # print("响应状态码:", response.status_code if hasattr(response, 'status_code') else 'N/A')
+    # print("响应头:", dict(response.headers) if hasattr(response, 'headers') else 'N/A')
     
     return response
 
@@ -187,30 +187,32 @@ def send_text_in_thread(text):
 
 @interview_bp.route('/answer', methods=['POST'])
 def answer():
-    # 调试代码
-    print("=== 调试信息 ===")
-    print("请求方法:", request.method)
-    print("请求头:", dict(request.headers))
-    print("Cookie:", request.headers.get('Cookie', 'No Cookie'))
-    print("Session ID:", session.get('_id', 'No session ID'))
-    print("Session内容:", dict(session))
+    # # 调试代码
+    # print("=== 调试信息 ===")
+    # print("请求方法:", request.method)
+    # print("请求头:", dict(request.headers))
+    # print("Cookie:", request.headers.get('Cookie', 'No Cookie'))
+    # print("Session ID:", session.get('_id', 'No session ID'))
+    # print("Session内容:", dict(session))
     
     # 从 session 中获取用户信息
     user_info = session.get('user_info')
-    # 调试代码
-    print("User info:", user_info)
+    # # 调试代码
+    # print("User info:", user_info)
     
     if not user_info:
-        print("User info not initialized in session")
+        # # 调试代码
+        # print("User info not initialized in session")
         return jsonify({'error': 'User info not initialized in session'}), 400
 
     # 获取用户消息，从POST请求体中获取
     user_message = request.json.get('message', '') if request.is_json else request.form.get('message', '')
-    # 调试代码
-    print("User message:", user_message)
+    # # 调试代码
+    # print("User message:", user_message)
     
     if not user_message:
-        print("Message is required")
+        # # 调试代码
+        # print("Message is required")
         return jsonify({'error': 'Message is required'}), 400
 
     # 获取历史对话记录
@@ -366,6 +368,14 @@ def del_wss():
 
 @interview_bp.route('/feedback', methods=['GET'])
 def feedback():
+    # # 调试代码
+    # print("=== 调试信息 ===")
+    # print("请求方法:", request.method)
+    # print("请求头:", dict(request.headers))
+    # print("Cookie:", request.headers.get('Cookie', 'No Cookie'))
+    # print("Session ID:", session.get('_id', 'No session ID'))
+    # print("Session内容:", dict(session))
+    
     """
     根据面试历史生成反馈
     """
@@ -375,9 +385,13 @@ def feedback():
     # 从数据库中获取最新的面试历史记录
     user_info = session.get('user_info')
     if not user_info:
+        # # 调试代码
+        # print("User info not initialized in session")
         return jsonify({'error': 'User info not initialized in session'}), 400
 
     if len(user_info['deepseek_history'])<=3:
+        # # 调试代码
+        # print("no history")
         return jsonify({'error': 'no history'}), 400
 
     # 读取 prompt.txt 内容

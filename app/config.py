@@ -44,3 +44,10 @@ class Config:
         'anchorId': 'cnr5dg8n2000000003',
         'vcn': 'x4_xiaozhong'
     }
+    
+    SPARK_PRACTICE_API = {
+        'url': 'https://xingchen-api.xf-yun.com/v1/chat/completions',
+        'api_key': '253673d89c9e36cba2fb4aa83c30977a',
+        'api_secret': 'ZTE0ZmU1MzNiZjlhNTgxNTExYWU3YTcw',
+        'flow_id': '7347256464096796674'
+    }

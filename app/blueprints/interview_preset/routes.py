@@ -118,3 +118,14 @@ def search_presets_by_name():
     
     return jsonify(result)
     
+
+@interview_preset_bp.route('/api/presets/suggest')
+def suggest_presets():
+    """根据输入内容返回预设名称联想推荐"""
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'suggestions': []})
+    service = get_interview_service()
+    suggestions = service.get_suggestions(q, limit=5)
+    return jsonify({'suggestions': suggestions})
+    

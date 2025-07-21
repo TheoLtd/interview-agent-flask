@@ -259,7 +259,7 @@ class InterviewPresetService:
             if conn:
                 conn.close()
     
-    def search_presets_by_name(self, keyword, page=1, per_page=10):
+    def search_presets_by_name0(self, keyword, page=1, per_page=10):
         """根据面试岗位名称进行模糊搜索"""
         conn = None
         try:
@@ -323,6 +323,56 @@ class InterviewPresetService:
             if conn:
                 conn.close()
     
+    def search_presets_by_name(self, keyword, page=1, per_page=10):
+        """根据面试岗位名称或专业进行模糊搜索"""
+        conn = None
+        try:
+            conn = db_manager.get_connection_context()
+            with conn.cursor() as cursor:
+                cursor.execute("USE interview")
+                where_clause = "WHERE name LIKE %s OR major LIKE %s"
+                search_param = f"%{keyword}%"
+                count_sql = "SELECT COUNT(*) FROM interview_preset_recommended " + where_clause
+                cursor.execute(count_sql, (search_param, search_param))
+                total_records = cursor.fetchone()[0]
+                total_pages = (total_records + per_page - 1) // per_page
+                offset = (page - 1) * per_page
+                data_sql = (
+                    "SELECT * FROM interview_preset_recommended "
+                    + where_clause +
+                    " ORDER BY heat DESC, id DESC LIMIT %s OFFSET %s"
+                )
+                cursor.execute(data_sql, (search_param, search_param, per_page, offset))
+                rows = cursor.fetchall()
+                columns = ['id', 'name', 'brief', 'difficulty', 'tags', 'heat', 'major', 'intension', 'responsibility']
+                result = []
+                for row in rows:
+                    row_dict = dict(zip(columns, row))
+                    if row_dict['difficulty'] is not None:
+                        row_dict['difficulty'] = float(row_dict['difficulty'])
+                    if row_dict['heat'] is not None:
+                        row_dict['heat'] = float(row_dict['heat'])
+                    result.append(row_dict)
+                return {
+                    'data': result,
+                    'pagination': {
+                        'current_page': page,
+                        'per_page': per_page,
+                        'total_records': total_records,
+                        'total_pages': total_pages
+                    },
+                    'search': {
+                        'keyword': keyword,
+                        'field': 'name_or_major'
+                    }
+                }
+        except Exception as e:
+            current_app.logger.error(f"搜索面试预设失败: {e}")
+            return {'error': str(e)}
+        finally:
+            if conn:
+                conn.close()
+    
     def get_random_presets(self, num=3):
         """获取指定数量的随机面试预设"""
         conn = None
@@ -372,6 +422,29 @@ class InterviewPresetService:
         except Exception as e:
             current_app.logger.error(f"获取随机面试预设失败: {e}")
             return {'error': str(e)}
+        finally:
+            if conn:
+                conn.close() 
+
+    def get_suggestions(self, q, limit=5):
+        """根据输入内容模糊匹配 name 或 major 字段，返回前 limit 条推荐（含岗位和专业）"""
+        conn = None
+        try:
+            conn = db_manager.get_connection_context()
+            with conn.cursor() as cursor:
+                cursor.execute("USE interview")
+                sql = (
+                    "SELECT name, major FROM interview_preset_recommended "
+                    "WHERE name LIKE %s OR major LIKE %s "
+                    "ORDER BY heat DESC, id DESC LIMIT %s"
+                )
+                cursor.execute(sql, (f"%{q}%", f"%{q}%", limit))
+                rows = cursor.fetchall()
+                # rows: [(name1, major1), (name2, major2), ...]
+                return [{"name": row[0], "major": row[1]} for row in rows]
+        except Exception as e:
+            current_app.logger.error(f"获取面试预设联想推荐失败: {e}")
+            return []
         finally:
             if conn:
                 conn.close() 
