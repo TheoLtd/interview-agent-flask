@@ -1,6 +1,0 @@
-
-Enter command: <target>|all <time>|-1 <command>[ <argument>]
-
-Parse error, at least 3 arguments were expected, only 1 given in string 'ODING=utf8 ; if ($?) { E:\APP\anaconda\envs\ruan\python.exe -u "e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\app\blueprints\interview\routes.py" }'
-[in#0/flv @ 00000230b75a08c0] Error during demuxing: I/O error
-[hls muxer @ 00000230b7c5bf80] failed to delete old segment e:\files\temp\Ruanjianbei\ruan\interview-agent-flask\resource\stream/playlist10.ts: No such file or directory
