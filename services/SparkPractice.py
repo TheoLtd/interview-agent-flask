@@ -1,7 +1,9 @@
 import http.client
 import json
 from flask import current_app
-
+# API_KEY = "9f638064e25b1ae24d828e89c1b21026"
+# API_SECRET = "Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3"
+# "flow_id": "7341661804480536578"
 
 # print("a")
 # headers = {
@@ -51,6 +53,7 @@ class AIPracticeAPI():
         print("[SparkPractice] status:", res.status, res.reason)
         raw_body = res.read()
         print("[SparkPractice] raw response:", raw_body)
+        print("[SparkPractice] raw response text:", raw_body.decode("utf-8"))
         if res.status != 200:
             # 直接返回错误描述
             return f"API error: {res.status} {res.reason} | body: {raw_body.decode('utf-8', errors='ignore')}"

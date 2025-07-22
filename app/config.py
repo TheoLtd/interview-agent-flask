@@ -45,12 +45,16 @@ class Config:
         'vcn': 'x4_xiaozhong'
     }
     
+    # API_KEY = "9f638064e25b1ae24d828e89c1b21026"
+    # API_SECRET = "Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3"
+    # "flow_id": "7341661804480536578"
+    
     SPARK_PRACTICE_API = {
         'host': 'xingchen-api.xf-yun.com',
         'path': '/workflow/v1/chat/completions',
-        'api_key': '253673d89c9e36cba2fb4aa83c30977a',
-        'api_secret': 'ZTE0ZmU1MzNiZjlhNTgxNTExYWU3YTcw',
-        'flow_id': '7347256464096796674'
+        'api_key': '9f638064e25b1ae24d828e89c1b21026',
+        'api_secret': 'Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3',
+        'flow_id': '7341661804480536578'
     }
 
     SPARK_MBTI_API = {

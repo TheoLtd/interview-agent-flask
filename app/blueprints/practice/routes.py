@@ -152,16 +152,20 @@ def handle_resume():
 
 @practice_bp.route('/mbti_test', methods=['GET'])
 def mbti_test():
-    user_message = request.args.get('prompt', default="", type=str)
+    user_message = request.args.get('prompt', default="", type=str).strip()
+    # 如果用户未提供额外信息，给予默认提示，方便模型自行发问或直接给出结果
     if not user_message:
-        return jsonify({'error': 'No message provided'}), 400
+        user_message = "（用户暂未提供额外信息，请先提出合适的问题或根据通用情况预测 MBTI 类型）"
 
-    # 构造MBTI测试prompt
-    mbti_prompt = f"""你是一名专业心理测评师，请根据通过给出用户适量问题(20道以下)和选项，用户给出答案，判断其可能的MBTI类型，并简要地表述用户适合的职业方向。必须按照以下建议输出用户的mbti类型(只有一个确切的答案)和简要理由:
-        ## 输出规则
-        1. **格式要求**：必须使用Markdown结构化输出
-        2. **长度控制**：总输出不超过200字
-        3. **内容分级**：按优先级标注（mbti类型, 简单的性格分析, 适合的职业）
+    # 构造 Prompt，将用户输入拼接进去
+    mbti_prompt = f"""你是一名专业心理测评师，请参考下方用户信息判断其可能的 MBTI 类型，并给出简要的类型解析与职业建议；若用户信息不足，可先给出不超过 10 道带选项的问题，随后直接给出最终结论。
+## 用户信息
+{user_message}
+
+## 输出规则
+1. **格式要求**：必须使用Markdown结构化输出
+2. **长度控制**：总输出不超过200字
+3. **内容分级**：按优先级标注（mbti类型, 简单的性格分析, 适合的职业）
     """
 
     AIMbti = AIMbtiAPI.getInstance()

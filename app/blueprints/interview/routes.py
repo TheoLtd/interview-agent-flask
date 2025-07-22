@@ -271,7 +271,7 @@ def init_shuziren():
         rtmp_to_hls(wsclient.streamUrl, hls_file_path_abs)
 
         # 等待HLS播放列表文件被FFmpeg创建
-        timeout = 20  # 秒
+        timeout = 25  # 秒
         start_time = time.time()
         while not os.path.exists(hls_file_path_abs):
             if time.time() - start_time > timeout:

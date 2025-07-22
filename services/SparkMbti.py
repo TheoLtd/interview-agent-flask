@@ -18,7 +18,8 @@ class AIMbtiAPI():
             "Authorization": f"Bearer {api_key}:{api_secret}",
         }
         
-        agent_client = http.client.HTTPSConnection(current_app.config['SPARK_MBTI_API']['url'], timeout=120)
+        # 与 SparkPractice 保持一致，使用 host + path
+        agent_client = http.client.HTTPSConnection(current_app.config['SPARK_MBTI_API']['host'], timeout=120)
         data = {
             "flow_id": current_app.config['SPARK_MBTI_API']['flow_id'],
             "uid": "123",
@@ -28,7 +29,7 @@ class AIMbtiAPI():
         }
         payload = json.dumps(data)
         agent_client.request(
-            "POST", "/workflow/v1/chat/completions", payload, headers, encode_chunked=True)
+            "POST", current_app.config['SPARK_MBTI_API'].get('path', '/workflow/v1/chat/completions'), payload, headers, encode_chunked=True)
         res = agent_client.getresponse()
         data = res.readline()
         response_data = json.loads(data.decode("utf-8"))
