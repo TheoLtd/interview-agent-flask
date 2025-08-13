@@ -3,7 +3,7 @@ import os
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key'
-    
+
     # 数据库连接配置
     PYMYSQL_CONFIG = {
         'host': 'localhost',
@@ -13,7 +13,7 @@ class Config:
         'database': 'interview',
         'charset': 'utf8mb4'
     }
-    
+
     # SQLAlchemy配置
     SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://nobody:0000@localhost/interview?charset=utf8mb4'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -34,7 +34,7 @@ class Config:
         "其他(非人脸表情图片)", "其他表情", "喜悦", "愤怒",
         "悲伤", "惊恐", "厌恶", "中性"
     ]
-    
+
     # 数字人配置
     AVATER_CONFIG = {
         'url': 'wss://avatar.cn-huadong-1.xf-yun.com/v1/interact',
@@ -44,11 +44,11 @@ class Config:
         'anchorId': 'cnr5dg8n2000000003',
         'vcn': 'x4_xiaozhong'
     }
-    
+
     # API_KEY = "9f638064e25b1ae24d828e89c1b21026"
     # API_SECRET = "Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3"
     # "flow_id": "7341661804480536578"
-    
+
     SPARK_PRACTICE_API = {
         'host': 'xingchen-api.xf-yun.com',
         'path': '/workflow/v1/chat/completions',
@@ -63,4 +63,12 @@ class Config:
         'host': 'xingchen-api.xf-yun.com',
         'path': '/workflow/v1/chat/completions',
         "flow_id": "7348687728526802946"
+    }
+
+    FACIAL_DETECT_API = {
+        url: "http://api.xf-yun.com/v1/private/{}",
+        server_id: "s67c9c78c",
+        appid: 'db4f89ef',
+        apisecret: 'ZDIwNzBiZmVlZmQyNGVkYzE4YWUyMDcx',
+        apikey: '53aa48c511bcb1cedc81fe7702342e1f',
     }

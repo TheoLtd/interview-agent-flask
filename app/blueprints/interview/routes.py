@@ -239,6 +239,10 @@ def init_shuziren():
     """
     初始化数字人，获取推流地址并转换为HLS
     """
+    # 在每次初始化数字人时，先清空上一轮生成的 HLS 缓存文件，避免旧切片干扰
+    project_root = os.path.dirname(current_app.root_path)
+    stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
+    delete_files_in_folder(stream_folder_abs)
     global wsclient
     if wsclient is not None:
         print("启动process")

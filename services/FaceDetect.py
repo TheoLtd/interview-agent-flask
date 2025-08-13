@@ -1,9 +1,13 @@
 ﻿# -*- coding: utf-8 -*-
 import json
-
-import requests
-import time
+from datetime import datetime
+from time import mktime
+from urllib.parse import urlencode
+import os
+import traceback
+import hmac
 import hashlib
+import requests
 import base64
 
 # 人脸特征分析表情webapi接口地址
@@ -17,7 +21,6 @@ ImageName = "img.jpg"
 # 图片数据可以通过两种方式上传，第一种在请求头设置image_url参数，第二种将图片二进制数据写入请求体中。若同时设置，以第一种为准。
 # 此demo使用第一种方式进行上传图片地址，如果想使用第二种方式，将图片二进制数据写入请求体即可。
 
-bendiimage="2.jpg"
 
 def getHeader(image_name, image_url=None):
     curTime = str(int(time.time()))
