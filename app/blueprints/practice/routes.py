@@ -1,6 +1,6 @@
-# import json
 # from flask import Blueprint
 # import datetime
+import json
 from flask import request, Response, jsonify, stream_with_context
 import pypdf
 import time
@@ -103,51 +103,180 @@ def evaluate_stream():
 
 @practice_bp.route('/resume', methods=['POST'])
 def handle_resume():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-    prompt = request.form.get('prompt', '')
-    prompt = '''你是一名资深职业规划师，请根据用户提供的简历内容，按以下要求输出优化建议：
-        ## 输出规则
-        1. **格式要求**：必须使用Markdown结构化输出
-        2. **长度控制**：每条建议不超过3句话，总输出不超过400字
-        3. **内容分级**：按优先级标注（❗关键项 / ⚠️改进项 / 💡加分项）
-        4. **禁止事项**：不得出现"建议优化"等模糊表述，必须给出具体修改方案
-        结尾不要出现"字数统计等字眼"
-        '''
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    if file:
+    """增强版简历优化接口"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
+            
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+        
+        # 检查文件类型
+        if not file.filename.lower().endswith(('.pdf', '.docx')):
+            return jsonify({'error': 'Invalid file type. Only PDF and DOCX files are allowed.'}), 400
+        
+        # 解析文件内容
         content = ''
-        if file.filename.endswith('.pdf'):
+        if file.filename.lower().endswith('.pdf'):
             pdf_reader = pypdf.PdfReader(BytesIO(file.read()))
             for page in pdf_reader.pages:
                 content += page.extract_text() + '\n'
-        elif file.filename.endswith('.docx'):
-            doc = docx.Document(file)
+        elif file.filename.lower().endswith('.docx'):
+            doc = docx.Document(BytesIO(file.read()))
             content = '\n'.join([para.text for para in doc.paragraphs])
-        # 保存简历内容到本地文件
+        
+        if not content.strip():
+            return jsonify({'error': 'Failed to extract content from file'}), 400
+        
+        # 保存简历内容
         save_dir = os.path.join(os.path.dirname(__file__), '../../resource/resume')
+        os.makedirs(save_dir, exist_ok=True)
         timestamp = int(time.time())
         filename = f"resume-{timestamp}.txt"
         filepath = os.path.join(save_dir, filename)
+        
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
         
-        print(content)
-        print(prompt)
-        if content:
-            Deepseek = DeepseekAPI.getInstance()
-            res = Deepseek.safe_generate_content_deepseek2(prompt+"，以下是简历内容："+content)
-            print(res)
-            print(res.text)
-            if res:
-                return jsonify({'content': res.text})
-            else:
-                return jsonify({'error': 'Deepseek API error'}), 500
+        # 构建增强版提示词
+        enhanced_prompt = f"""
+你是一名资深的HR专家和职业规划师，拥有15年以上的招聘和简历评估经验。请对以下简历进行全面、专业的分析和优化建议。
+
+## 📋 **分析维度**
+
+### 1. 简历结构与格式 (Resume Structure & Format)
+- 版面设计的专业性和可读性
+- 信息层次和逻辑结构
+- 格式一致性和视觉效果
+
+### 2. 内容完整性 (Content Completeness)
+- 必要信息的完整程度
+- 关键经历的覆盖面
+- 技能和成就的展示
+
+### 3. 专业匹配度 (Professional Alignment)
+- 经历与目标岗位的匹配度
+- 技能栈的相关性和深度
+- 职业发展路径的清晰度
+
+### 4. 成果量化 (Achievement Quantification)
+- 工作成果的具体化程度
+- 数据指标的运用
+- 影响力的体现
+
+### 5. 语言表达 (Language & Expression)
+- 专业术语的准确性
+- 表达的简洁有力
+- 动词和描述的效果
+
+## 📊 **输出要求**
+
+请严格按照以下JSON格式输出分析结果：
+
+```json
+{{
+  "overall_score": 整体评分(0-100),
+  "dimension_scores": {{
+    "structure_format": 结构格式分数(0-100),
+    "content_completeness": 内容完整性分数(0-100),
+    "professional_alignment": 专业匹配度分数(0-100),
+    "achievement_quantification": 成果量化分数(0-100),
+    "language_expression": 语言表达分数(0-100)
+  }},
+  "strengths": [
+    {{
+      "category": "优势类别",
+      "title": "优势标题",
+      "description": "具体描述，30-80字",
+      "evidence": "支撑证据或具体表现"
+    }}
+  ],
+  "improvements": [
+    {{
+      "category": "改进类别",
+      "title": "改进点标题",
+      "description": "问题描述，30-80字", 
+      "suggestion": "具体改进建议，50-100字",
+      "priority": "high|medium|low",
+      "expected_impact": "预期改进效果"
+    }}
+  ],
+  "optimization_recommendations": [
+    {{
+      "section": "简历部分(如教育背景、工作经历等)",
+      "current_issue": "当前问题",
+      "recommended_action": "具体优化行动",
+      "example": "优化示例或模板"
+    }}
+  ],
+  "keyword_suggestions": [
+    "建议添加的关键词1",
+    "建议添加的关键词2"
+  ],
+  "summary": "综合评价和建议，100-200字"
+}}
+```
+
+## 💼 **简历内容**
+
+{content}
+
+请基于以上简历内容，进行深入、专业的分析，给出具体可操作的优化建议。
+"""
+        
+        print(f"📄 处理简历文件: {file.filename}")
+        print(f"📝 简历内容长度: {len(content)} 字符")
+        
+        # 使用DeepSeek API进行分析
+        deepseek = DeepseekAPI.getInstance()
+        response = deepseek.chat_return_json(enhanced_prompt)
+        
+        if response and response.content:
+            try:
+                # 尝试解析JSON响应
+                analysis_result = json.loads(response.content)
+                
+                # 保存分析结果
+                analysis_filename = f"resume_analysis_{timestamp}.json"
+                analysis_filepath = os.path.join(save_dir, analysis_filename)
+                
+                with open(analysis_filepath, 'w', encoding='utf-8') as f:
+                    json.dump(analysis_result, f, ensure_ascii=False, indent=2)
+                
+                return jsonify({
+                    'success': True,
+                    'content': analysis_result,
+                    'type': 'enhanced_analysis',
+                    'files': {
+                        'resume': filename,
+                        'analysis': analysis_filename
+                    },
+                    'message': 'Enhanced resume analysis completed successfully'
+                })
+                
+            except json.JSONDecodeError:
+                # 如果不是JSON格式，使用原始文本
+                return jsonify({
+                    'success': True,
+                    'content': {
+                        'analysis_text': response.content,
+                        'overall_score': 75,  # 默认分数
+                        'summary': response.content[:200] + '...' if len(response.content) > 200 else response.content
+                    },
+                    'type': 'text_analysis',
+                    'files': {'resume': filename},
+                    'message': 'Resume analysis completed (text format)'
+                })
+        else:
+            return jsonify({'error': 'AI analysis service unavailable'}), 500
     
-    return jsonify({'error': 'Invalid file type. Only PDF files are allowed.'}), 400
+    except Exception as e:
+        print(f"Resume analysis error: {str(e)}")
+        return jsonify({
+            'error': f'Resume analysis failed: {str(e)}',
+            'suggestion': 'Please try again or contact support'
+        }), 500
 
 
 @practice_bp.route('/mbti_test', methods=['GET'])

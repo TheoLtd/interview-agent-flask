@@ -1,4 +1,5 @@
 import pymysql
+import redis
 from flask import g, current_app
 from DBUtils.PooledDB import PooledDB
 from sqlalchemy import create_engine, text
@@ -8,6 +9,9 @@ from flask_sqlalchemy import SQLAlchemy
 
 # 创建SQLAlchemy实例
 db = SQLAlchemy()
+
+# Redis连接池
+redis_client = None
 
 class DatabaseManager:
     def __init__(self):
@@ -142,3 +146,74 @@ def close_db(e=None):
     session = g.pop('session', None)
     if session is not None:
         session.close()
+
+class RedisManager:
+    """Redis管理器"""
+    def __init__(self):
+        self.client = None
+        self._initialized = False
+    
+    def init_app(self, app):
+        """初始化Redis连接"""
+        config = app.config['REDIS_CONFIG']
+        
+        # 检查是否启用Redis
+        if not config.get('enabled', False):
+            print("⚠️ Redis已禁用，将使用内存存储")
+            self.client = None
+            self._initialized = False
+            return
+            
+        try:
+            self.client = redis.Redis(
+                host=config['host'],
+                port=config['port'],
+                db=config['db'],
+                password=config['password'],
+                decode_responses=config['decode_responses'],
+                socket_connect_timeout=config['socket_connect_timeout'],
+                socket_timeout=config['socket_timeout'],
+                connection_pool=redis.ConnectionPool(
+                    host=config['host'],
+                    port=config['port'],
+                    db=config['db'],
+                    password=config['password'],
+                    decode_responses=config['decode_responses'],
+                    max_connections=20
+                )
+            )
+            
+            # 测试连接
+            self.client.ping()
+            print("✅ Redis连接成功")
+            self._initialized = True
+            
+        except Exception as e:
+            print(f"❌ Redis连接失败: {e}")
+            print("⚠️ 将使用内存存储作为后备方案")
+            self.client = None
+            self._initialized = False
+    
+    def get_client(self):
+        """获取Redis客户端"""
+        return self.client
+    
+    def is_available(self):
+        """检查Redis是否可用"""
+        return self._initialized and self.client is not None
+
+# 全局Redis管理器实例
+redis_manager = RedisManager()
+
+def get_redis():
+    """获取Redis客户端"""
+    return redis_manager.get_client()
+
+def init_extensions(app):
+    """初始化所有扩展"""
+    # 初始化数据库
+    db_manager.init_app(app)
+    db.init_app(app)
+    
+    # 初始化Redis
+    redis_manager.init_app(app)

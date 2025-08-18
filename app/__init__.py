@@ -4,10 +4,11 @@ from app.blueprints.practice import practice_bp
 from app.blueprints.interview import interview_bp
 from app.blueprints.interview_preset import interview_preset_bp
 from app.blueprints.database import database_bp
+from app.blueprints.user import user_bp
 import glob
 import os
 from app.config import Config
-from app.extensions import db_manager, db
+from app.extensions import db_manager, db, init_extensions
 from app.extensions import close_db
 import logging
 from logging.config import dictConfig
@@ -84,14 +85,14 @@ def create_app():
     app.config.from_object(Config)
     
     # 初始化扩展
-    db_manager.init_app(app)
-    db.init_app(app)
+    init_extensions(app)
 
     # 注册蓝图
     app.register_blueprint(practice_bp)  # 注册 practice 蓝图
     app.register_blueprint(interview_bp)  # 注册 interview 蓝图
     app.register_blueprint(interview_preset_bp)  # 注册 interview_preset 蓝图
     app.register_blueprint(database_bp)  # 注册 database 蓝图
+    app.register_blueprint(user_bp)  # 注册 user 蓝图
 
     # 为特定路由添加文件日志记录，并阻止在终端输出
     access_logger = logging.getLogger('access_logger')

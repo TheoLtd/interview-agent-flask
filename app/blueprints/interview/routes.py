@@ -1,7 +1,7 @@
 # import json
 # import docx
 # from io import BytesIO
-# from flask import Blueprint, logging, Response 
+# from flask import Blueprint, logging, Response
 # #  import PyPDF2
 # import pypdf
 import glob
@@ -53,14 +53,14 @@ def init():
     # print("请求方法:", request.method)
     # print("Session ID:", session.get('_id', 'No session ID'))
     # print("Session内容:", dict(session))
-    
+
     data = request.get_json()
     major = data.get('major')
     intention = data.get('intention')
     job_description = data.get('job_description')
     if not all([major, intention, job_description]):
         return jsonify({'error': 'Missing required fields'}), 400
-    
+
     # 在 session 中为该用户初始化信息
     user_info = {
         "major": major,
@@ -70,28 +70,28 @@ def init():
     }
     session['user_info'] = user_info
     session['facial_expression_list'] = [0] * 8
-    
+
     # # 调试代码
     # print("设置Session后:")
     # print("Session内容:", dict(session))
     # print("User info:", session.get('user_info'))
-    
+
     # 为此会话创建日志文件
     log_dir = os.path.join(os.path.dirname(current_app.root_path), 'log', 'chat')
     os.makedirs(log_dir, exist_ok=True)
     timestamp = int(time.time())
     log_file_name = f"chat_{timestamp}.log"
     session['chat_log_file'] = log_file_name
-    
+
     log_to_chat_file(f"面试会话为用户启动。专业: {major}, 意向: {intention}")
-    
+
     response = initdeepseek()
-    
+
     # # 调试代码：查看响应头中的cookie设置
     # print("=== 响应调试信息 ===")
     # print("响应状态码:", response.status_code if hasattr(response, 'status_code') else 'N/A')
     # print("响应头:", dict(response.headers) if hasattr(response, 'headers') else 'N/A')
-    
+
     return response
 
 
@@ -107,6 +107,15 @@ def image_detect():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     if file:
+        is_exists_path = os.path.exists(current_app.config['UPLOAD_FOLDER_FACE_ROUTE'])
+        if not is_exists_path:
+            os.makedirs(current_app.config['UPLOAD_FOLDER_FACE_ROUTE'])
+        # check the file type:
+        if not file.filename.lower().endswith(('jpg','png', 'bmp')):
+            return jsonify({'error': 'Invalid file type. Only image files are allowed.'}), 400
+        # save the file with the user tag:
+        # use the timestamp to avoid file name conflicts
+        user = session.get('user_id', 1)
         save_path = os.path.join(current_app.config['UPLOAD_FOLDER_FACE_ROUTE'], file.filename+"_"+timestamp + '.jpg')
         file.save(save_path)
         # if False:
@@ -116,7 +125,7 @@ def image_detect():
         facial_expression_list = session.get('facial_expression_list', [0] * 8)
         facial_expression_list = add_arrays(facial_expression_list, facial_expression)
         session['facial_expression_list'] = facial_expression_list
-        
+
         return jsonify({'content': 'Success'})
     return jsonify({'error': 'Invalid file type. Only image files are allowed.'}), 400
 
@@ -136,7 +145,7 @@ def initdeepseek():
             prompt = f.read()
     except Exception as e:
         return jsonify({'error': f'Failed to read prompt.txt: {str(e)}'}), 500
-    
+
     log_to_chat_file({"event": "Initial Prompt", "prompt": prompt})
 
     # 将 prompt 加入历史记录
@@ -167,10 +176,10 @@ def initdeepseek():
 
     except Exception as e:
         return jsonify({'error': f'调用Deepseek API失败: {str(e)}'}), 500
-    
+
     # 将更新后的用户信息存回 session
     session['user_info'] = user_info
-    
+
     return jsonify({'content': second_response.content})
 
 
@@ -194,12 +203,12 @@ def answer():
     # print("Cookie:", request.headers.get('Cookie', 'No Cookie'))
     # print("Session ID:", session.get('_id', 'No session ID'))
     # print("Session内容:", dict(session))
-    
+
     # 从 session 中获取用户信息
     user_info = session.get('user_info')
     # # 调试代码
     # print("User info:", user_info)
-    
+
     if not user_info:
         # # 调试代码
         # print("User info not initialized in session")
@@ -209,7 +218,7 @@ def answer():
     user_message = request.json.get('message', '') if request.is_json else request.form.get('message', '')
     # # 调试代码
     # print("User message:", user_message)
-    
+
     if not user_message:
         # # 调试代码
         # print("Message is required")
@@ -226,7 +235,7 @@ def answer():
             send_text_in_thread(response.content)
     except Exception as e:
         return jsonify({'error': f'调用Deepseek API失败: {str(e)}'}), 500
-    
+
     # 将更新后的用户信息存回 session
     session['user_info'] = user_info
 
@@ -265,12 +274,12 @@ def init_shuziren():
             time.sleep(1)
             pass
         print(wsclient.streamUrl)
-        
+
         # 使用绝对路径确保路径一致性
         project_root = os.path.dirname(current_app.root_path)
         hls_folder_abs = os.path.join(project_root, 'resource', 'stream')
         hls_file_path_abs = os.path.join(hls_folder_abs, 'playlist.m3u8')
-        
+
         # 传递绝对路径给 ffmpeg
         rtmp_to_hls(wsclient.streamUrl, hls_file_path_abs)
 
@@ -282,7 +291,7 @@ def init_shuziren():
                 print("错误：等待HLS播放列表文件超时")
                 return jsonify({'error': '创建HLS流超时'}), 500
             time.sleep(0.5)
-        
+
         print("HLS播放列表文件已找到，推流准备就绪")
         return jsonify({'content': "true"})
     except Exception as e:
@@ -314,7 +323,7 @@ def rtmp_to_hls(input_rtmp_url, output_hls_path):
         # 确保日志目录存在
         log_dir = os.path.join('log', 'ffmpeg_log')
         os.makedirs(log_dir, exist_ok=True)
-        
+
         # 创建带时间戳的日志文件名
         timestamp = int(time.time())
         log_file_name = f"ffmpeg_{timestamp}.log"
@@ -345,13 +354,13 @@ def video(filename):
     project_root = os.path.dirname(current_app.root_path)
     video_folder_abs = os.path.join(project_root, 'resource', 'stream')
     response = send_from_directory(video_folder_abs, filename)
-    
+
     # 禁用HLS播放列表文件的缓存
     if filename.endswith('.m3u8'):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
-        
+
     return response
 
 
@@ -379,72 +388,223 @@ def feedback():
     # print("Cookie:", request.headers.get('Cookie', 'No Cookie'))
     # print("Session ID:", session.get('_id', 'No session ID'))
     # print("Session内容:", dict(session))
-    
+
     """
     根据面试历史生成反馈
     """
-    # 从 session 中获取用户信息
-    user_id = session.get('user_id', 1)
-    
-    # 从数据库中获取最新的面试历史记录
-    user_info = session.get('user_info')
-    if not user_info:
-        # # 调试代码
-        # print("User info not initialized in session")
-        return jsonify({'error': 'User info not initialized in session'}), 400
-
-    if len(user_info['deepseek_history'])<=3:
-        # # 调试代码
-        # print("no history")
-        return jsonify({'error': 'no history'}), 400
-
-    # 读取 prompt.txt 内容
-    prompt_path = os.path.join(os.path.dirname(__file__), '../../../services', 'feedbackPrompt.txt')
     try:
-        with open(prompt_path, 'r', encoding='utf-8') as f:
-            prompt = f.read()
-            history_str = json.dumps(user_info['deepseek_history'][3:], ensure_ascii=False)
-            prompt += history_str
+        # 从 session 中获取用户信息
+        user_info = session.get('user_info')
+        if not user_info:
+            return jsonify({'error': 'User info not initialized in session'}), 400
+
+        # 检查面试历史
+        deepseek_history = user_info.get('deepseek_history', [])
+        if len(deepseek_history) <= 3:
+            return jsonify({'error': 'Insufficient interview history for analysis'}), 400
+
+        # 获取表情分析数据
+        facial_expression_list = session.get('facial_expression_list', [])
+
+        # 使用增强分析器
+        from services.EnhancedInterviewAnalyzer import EnhancedInterviewAnalyzer
+        analyzer = EnhancedInterviewAnalyzer()
+        
+        # 生成面试分析报告
+        analysis_result = analyzer.analyze_interview_performance(
+            interview_history=deepseek_history[3:],  # 跳过初始化消息
+            user_info=user_info,
+            facial_expressions=facial_expression_list if sum(facial_expression_list) > 0 else None
+        )
+
+        if not analysis_result.get('success'):
+            return jsonify({
+                'error': analysis_result.get('error', 'Analysis failed'),
+                'fallback_content': _generate_fallback_feedback(user_info, deepseek_history)
+            }), 500
+
+        # 保存分析结果到文件
+        timestamp = int(time.time())
+        filename = f"enhanced_feedback_{timestamp}.json"
+        filepath = os.path.join(current_app.config['FEEDBACK_FOLDER_ROUTE'], filename)
+        
+        # 确保目录存在
+        os.makedirs(current_app.config['FEEDBACK_FOLDER_ROUTE'], exist_ok=True)
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(analysis_result, f, ensure_ascii=False, indent=2)
+
+        # 记录日志
+        log_to_chat_file({
+            "event": "Enhanced Feedback Generated", 
+            "overall_score": analysis_result.get('overall_score'),
+            "timestamp": analysis_result.get('timestamp'),
+            "file": filename
+        })
+
+        return jsonify({
+            'success': True,
+            'content': analysis_result,
+            'message': 'Enhanced interview analysis completed successfully'
+        })
+
     except Exception as e:
-        return jsonify({'error': f'Failed to read prompt.txt: {str(e)}'}), 500
-    try:
-        response = DeepseekAPI.getInstance().chat_return_json(prompt)
-        if response:
-            log_to_chat_file({"event": "Feedback Generated", "feedback_response": response.content})
-            timestamp = int(time.time())
-            filename = f"feedback-{timestamp}.txt"
-            filepath = os.path.join(current_app.config['FEEDBACK_FOLDER_ROUTE'], filename)
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(response.content)
-    except Exception as e:
-        return jsonify({'error': f'调用DeepseekAPI失败: {str(e)}'}), 500
-    return jsonify({'content': response.content})
+        print(f"Enhanced feedback generation failed: {str(e)}")
+        # 降级到原有的简单反馈
+        return _generate_simple_feedback(user_info, deepseek_history)
 
 @interview_bp.route('/feedback2', methods=['GET'])
 def feedback2():
-    # 从 session 获取用户信息和表情列表
-    user_info = session.get('user_info', {})
-    facial_expression_list = session.get('facial_expression_list', [])
 
-    txt_files = glob.glob(os.path.join(current_app.config['FEEDBACK_FOLDER_ROUTE'], "*.txt"))
+    try:
+        # 从 session 获取用户信息和表情列表
+        user_info = session.get('user_info', {})
+        facial_expression_list = session.get('facial_expression_list', [])
 
-    if not txt_files:
-        return "No feedback files found."
+        # 优先查找增强版反馈文件
+        enhanced_files = glob.glob(os.path.join(current_app.config['FEEDBACK_FOLDER_ROUTE'], "enhanced_feedback_*.json"))
+        
+        if enhanced_files:
+            # 获取最新的增强版反馈
+            latest_enhanced_file = max(enhanced_files, key=os.path.getctime)
+            
+            with open(latest_enhanced_file, 'r', encoding='utf-8') as f:
+                enhanced_feedback = json.load(f)
+            
+            # 格式化返回增强版分析结果
+            return jsonify({
+                'type': 'enhanced',
+                'content': enhanced_feedback,
+                'user_info': user_info,
+                'facial_expression_list': facial_expression_list,
+                'message': 'Enhanced interview analysis result'
+            })
+        
+        # 降级到原有的简单反馈
+        txt_files = glob.glob(os.path.join(current_app.config['FEEDBACK_FOLDER_ROUTE'], "*.txt"))
 
-    latest_file = max(txt_files, key=os.path.getctime)
+        if not txt_files:
+            return jsonify({
+                'type': 'fallback',
+                'content': _generate_fallback_feedback(user_info, []),
+                'message': 'No feedback files found, using fallback content'
+            })
 
-    with open(latest_file, 'r', encoding='utf-8') as f:
-        feedback_content = f.read()
+        latest_file = max(txt_files, key=os.path.getctime)
 
-    response = f"""
-    <p><strong>面试反馈:</strong></p>
-    <p>{feedback_content}</p>
-    <p><strong>major:</strong> {user_info.get('major', 'N/A')}</p>
-    <p><strong>intention:</strong> {user_info.get('intention', 'N/A')}</p>
-    <p><strong>job_description:</strong> {user_info.get('job_description', 'N/A')}</p>
-    <p><strong>facial_expression_list:</strong> {facial_expression_list}</p>
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            feedback_content = f.read()
+
+        # 尝试解析JSON格式的反馈
+        try:
+            feedback_json = json.loads(feedback_content)
+            return jsonify({
+                'type': 'simple_json',
+                'content': feedback_json,
+                'user_info': user_info,
+                'facial_expression_list': facial_expression_list
+            })
+        except json.JSONDecodeError:
+            # 如果不是JSON格式，返回原始文本
+            return jsonify({
+                'type': 'simple_text',
+                'content': {
+                    'feedback_text': feedback_content,
+                    'scores': [70, 70, 70, 70, 70, 70],  # 默认分数
+                    'advantages': [],
+                    'disadvantages': []
+                },
+                'user_info': user_info,
+                'facial_expression_list': facial_expression_list
+            })
+            
+    except Exception as e:
+        print(f"Feedback2 error: {str(e)}")
+        return jsonify({
+            'type': 'error',
+            'error': str(e),
+            'content': _generate_fallback_feedback(user_info, [])
+        }), 500
+
+
+@interview_bp.route('/feedback/enhanced', methods=['GET'])
+def enhanced_feedback():
     """
-    return response
+    专门的增强版反馈接口
+    """
+    try:
+        # 从session获取数据
+        user_info = session.get('user_info')
+        if not user_info:
+            return jsonify({'error': 'User info not found'}), 400
+            
+        deepseek_history = user_info.get('deepseek_history', [])
+        if len(deepseek_history) <= 3:
+            return jsonify({'error': 'Insufficient interview data'}), 400
+            
+        facial_expression_list = session.get('facial_expression_list', [])
+        
+        # 使用增强分析器直接生成
+        from services.EnhancedInterviewAnalyzer import EnhancedInterviewAnalyzer
+        analyzer = EnhancedInterviewAnalyzer()
+        
+        analysis_result = analyzer.analyze_interview_performance(
+            interview_history=deepseek_history[3:],
+            user_info=user_info,
+            facial_expressions=facial_expression_list if sum(facial_expression_list) > 0 else None
+        )
+        
+        return jsonify(analysis_result)
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Enhanced feedback generation failed: {str(e)}'
+        }), 500
+
+
+def _generate_fallback_feedback(user_info: dict, deepseek_history: list) -> dict:
+    """生成降级反馈内容"""
+    return {
+        "overall_score": 70,
+        "scores": [70, 70, 70, 70, 70, 70],
+        "advantages": [
+            {
+                "title": "基础交流",
+                "desc": "能够进行基本的面试对话和问题回答"
+            }
+        ],
+        "disadvantages": [
+            {
+                "title": "分析受限",
+                "desc": "由于技术原因，无法进行深度分析，建议重新生成反馈"
+            }
+        ],
+        "interview_summary": "由于分析过程中出现技术问题，当前为简化版反馈。建议稍后重试以获得详细分析报告。"
+    }
+
+
+def _generate_simple_feedback(user_info: dict, deepseek_history: list):
+    """生成简单反馈 - 使用原有逻辑作为降级方案"""
+    try:
+        # 使用原有的简单反馈逻辑
+        prompt_path = os.path.join(os.path.dirname(__file__), '../../../services', 'feedbackPrompt.txt')
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            prompt = f.read()
+            history_str = json.dumps(deepseek_history[3:], ensure_ascii=False)
+            prompt += history_str
+            
+        response = DeepseekAPI.getInstance().chat_return_json(prompt)
+        if response:
+            return jsonify({'content': response.content, 'type': 'simple_feedback'})
+        else:
+            return jsonify({'error': 'Failed to generate feedback'}), 500
+            
+    except Exception as e:
+        return jsonify({
+            'error': f'Simple feedback generation failed: {str(e)}',
+            'content': _generate_fallback_feedback(user_info, deepseek_history)
+        }), 500
 
 
 def delete_files_in_folder(folder_path):

@@ -52,9 +52,20 @@ class Config:
     SPARK_PRACTICE_API = {
         'host': 'xingchen-api.xf-yun.com',
         'path': '/workflow/v1/chat/completions',
-        'api_key': '9f638064e25b1ae24d828e89c1b21026',
-        'api_secret': 'Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3',
-        'flow_id': '7341661804480536578'
+        # 'api_key': '9f638064e25b1ae24d828e89c1b21026',
+        'api_key': '253673d89c9e36cba2fb4aa83c30977a',
+        # 'api_secret': 'Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3',
+        'api_secret': 'ZTE0ZmU1MzNiZjlhNTgxNTExYWU3YTcw',
+        # 'flow_id': '7341661804480536578'
+        'flow_id': '7347256464096796674'
+    }
+    
+    RESUME_REFINATION_API = {
+        'host': 'xingchen-api.xf-yun.com',
+        'path': '/workflow/v1/chat/completions',
+        'api_secret': 'YzY0NzEyMDZmNzc5MDdjYTUwNDU5MWZk',
+        'api_key': '580f7a3948f1ab7419a281456f4fd8aa',
+        'flow_id': '7358336534640013314'
     }
 
     SPARK_MBTI_API = {
@@ -66,9 +77,31 @@ class Config:
     }
 
     FACIAL_DETECT_API = {
-        url: "http://api.xf-yun.com/v1/private/{}",
-        server_id: "s67c9c78c",
-        appid: 'db4f89ef',
-        apisecret: 'ZDIwNzBiZmVlZmQyNGVkYzE4YWUyMDcx',
-        apikey: '53aa48c511bcb1cedc81fe7702342e1f',
+        'url': "http://api.xf-yun.com/v1/private/{}",
+        'server_id': "s67c9c78c",
+        'appid': 'db4f89ef',
+        'apisecret': 'ZDIwNzBiZmVlZmQyNGVkYzE4YWUyMDcx',
+        'apikey': '53aa48c511bcb1cedc81fe7702342e1f',
+    }
+
+    MINI_PROGRAM_INFO = {
+        'WECHAT_APPID' : "wx08a49c2b8918c480",
+        # check the secret 
+        'WECHAT_SECRET' : "d5b0c6f8e4a3c2e6f4f9e1b8a2c7d4e5",
+    }
+    
+    SPUG_API = {
+        'ID' : 'My5R7m0knl8V2DgG'
+    }
+    
+    # Redis配置
+    REDIS_CONFIG = {
+        'enabled': os.environ.get('REDIS_ENABLED', 'false').lower() == 'true',  # 默认不启用Redis
+        'host': os.environ.get('REDIS_HOST') or 'localhost',
+        'port': int(os.environ.get('REDIS_PORT') or 6379),
+        'db': int(os.environ.get('REDIS_DB') or 0),
+        'password': os.environ.get('REDIS_PASSWORD') or None,
+        'decode_responses': True,  # 自动解码响应为字符串
+        'socket_connect_timeout': 5,
+        'socket_timeout': 5
     }
