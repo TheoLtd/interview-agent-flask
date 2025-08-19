@@ -52,7 +52,7 @@ def assemble_auth_url(requset_url, method="GET", api_key="", api_secret=""):
     signature_sha = hmac.new(api_secret.encode('utf-8'), signature_origin.encode('utf-8'),
                              digestmod=hashlib.sha256).digest()
     signature_sha = base64.b64encode(signature_sha).decode(encoding='utf-8')
-    authorization_origin = "api_key=\"%s\", algorithm=\"%s\", headers=\"%s\", signature=\"%s\"" % (
+    authorization_origin = "hmac username=\"%s\", algorithm=\"%s\", headers=\"%s\", signature=\"%s\"" % (
         api_key, "hmac-sha256", "host date request-line", signature_sha)
     authorization = base64.b64encode(authorization_origin.encode('utf-8')).decode(encoding='utf-8')
     values = {

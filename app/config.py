@@ -38,11 +38,14 @@ class Config:
     # 数字人配置
     AVATER_CONFIG = {
         'url': 'wss://avatar.cn-huadong-1.xf-yun.com/v1/interact',
-        'appId': 'db4f89ef',
-        'appKey': '53aa48c511bcb1cedc81fe7702342e1f',
-        'appSecret': 'ZDIwNzBiZmVlZmQyNGVkYzE4YWUyMDcx',
-        'anchorId': 'cnr5dg8n2000000003',
-        'vcn': 'x4_xiaozhong'
+        # 'appId': 'db4f89ef',
+        # 'appKey': '53aa48c511bcb1cedc81fe7702342e1f',
+        # 'appSecret': 'ZDIwNzBiZmVlZmQyNGVkYzE4YWUyMDcx',
+        'appId': 'd5dcadda',
+        'appKey': '9e826e8908aa5e9b4adb6309d713ef29',
+        'appSecret': 'MjhlMzVlOGU1YWJmNTcwNjE0MzNiMDcw',
+        'anchorId': 'cnrmkf0e2000000006',
+        'vcn': 'x4_panting'
     }
 
     # API_KEY = "9f638064e25b1ae24d828e89c1b21026"

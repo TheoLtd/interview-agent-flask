@@ -188,8 +188,10 @@ def send_text_in_thread(text):
     def target(wsclient: avatarWebsocket, text):
         print("进入")
         print(wsclient.streamUrl)
-        if wsclient is not None:
+        if wsclient is not None and not wsclient.is_session_expired():
             wsclient.sendDriverText(text)
+        elif wsclient is not None and wsclient.is_session_expired():
+            print("会话已超时，无法发送消息")
     if wsclient is not None:
         thread = threading.Thread(target=lambda: target(wsclient, text))
         thread.start()
@@ -253,10 +255,26 @@ def init_shuziren():
     stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
     delete_files_in_folder(stream_folder_abs)
     global wsclient
-    if wsclient is not None:
+    
+    # 如果已有客户端且未超时，直接返回
+    if wsclient is not None and not wsclient.is_session_expired():
         print("启动process")
         rtmp_to_hls(wsclient.streamUrl, current_app.config['HLS_FOLDER_FILE'])
-        return jsonify({'content': "true"})
+        return jsonify({
+            'content': "true",
+            'remaining_time': wsclient.get_session_remaining_time(),
+            'session_active': True
+        })
+    
+    # 如果客户端超时，先清理旧连接
+    if wsclient is not None and wsclient.is_session_expired():
+        print("检测到会话超时，清理旧连接")
+        try:
+            wsclient.stop()
+        except Exception as e:
+            print(f"清理旧连接时出错: {e}")
+        wsclient = None
+    
     url = current_app.config['AVATER_CONFIG']['url']
     appId = current_app.config['AVATER_CONFIG']['appId']
     appKey = current_app.config['AVATER_CONFIG']['appKey']
@@ -284,7 +302,8 @@ def init_shuziren():
         rtmp_to_hls(wsclient.streamUrl, hls_file_path_abs)
 
         # 等待HLS播放列表文件被FFmpeg创建
-        timeout = 25  # 秒
+        print("等待HLS播放列表文件被FFmpeg创建")
+        timeout = 60  # 秒
         start_time = time.time()
         while not os.path.exists(hls_file_path_abs):
             if time.time() - start_time > timeout:
@@ -293,10 +312,86 @@ def init_shuziren():
             time.sleep(0.5)
 
         print("HLS播放列表文件已找到，推流准备就绪")
-        return jsonify({'content': "true"})
+        return jsonify({
+            'content': "true",
+            'remaining_time': wsclient.get_session_remaining_time(),
+            'session_active': True
+        })
     except Exception as e:
         print(f"初始化数字人时发生错误: {e}")
         return jsonify({'error': '初始化数字人失败'}), 500
+
+
+@interview_bp.route('/session_status', methods=['GET'])
+def get_session_status():
+    """
+    获取avatar会话状态和剩余时间
+    """
+    global wsclient
+    
+    if wsclient is None:
+        return jsonify({
+            'session_active': False,
+            'remaining_time': 0,
+            'elapsed_time': 0,
+            'message': '会话未启动'
+        })
+    
+    if wsclient.is_session_expired():
+        return jsonify({
+            'session_active': False,
+            'remaining_time': 0,
+            'elapsed_time': wsclient.get_session_elapsed_time(),
+            'message': '会话已超时'
+        })
+    
+    remaining_time = wsclient.get_session_remaining_time()
+    elapsed_time = wsclient.get_session_elapsed_time()
+    
+    return jsonify({
+        'session_active': True,
+        'remaining_time': remaining_time,
+        'elapsed_time': elapsed_time,
+        'remaining_minutes': round(remaining_time / 60, 1),
+        'elapsed_minutes': round(elapsed_time / 60, 1),
+        'message': f'会话活跃，剩余时间: {round(remaining_time / 60, 1)}分钟'
+    })
+
+
+@interview_bp.route('/end_session', methods=['POST'])
+def end_session():
+    """
+    手动结束avatar会话
+    """
+    global wsclient
+    
+    if wsclient is None:
+        return jsonify({
+            'success': False,
+            'message': '没有活跃的会话'
+        })
+    
+    try:
+        # 发送结束消息
+        if not wsclient.is_session_expired():
+            wsclient.sendDriverText("面试会话已手动结束，感谢您的参与！")
+            time.sleep(2)  # 给一点时间让消息发送完成
+        
+        # 停止会话
+        wsclient.stop()
+        wsclient = None
+        
+        return jsonify({
+            'success': True,
+            'message': '会话已成功结束'
+        })
+    except Exception as e:
+        print(f"结束会话时出错: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'结束会话时出错: {str(e)}'
+        }), 500
+
 
 def rtmp_to_hls(input_rtmp_url, output_hls_path):
     """
