@@ -5,8 +5,34 @@ from datetime import datetime, timedelta
 from flask import current_app, request
 from app.extensions import get_session
 from app.models.user import User, UserLoginLog
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
+from functools import wraps
+import time
 import requests
+
+
+def db_retry(max_retries=3, delay=1):
+    """数据库操作重试装饰器"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except OperationalError as e:
+                    last_exception = e
+                    if "MySQL server has gone away" in str(e) or "Lost connection" in str(e):
+                        print(f"⚠️ 数据库连接丢失，第 {attempt + 1} 次重试...")
+                        if attempt < max_retries - 1:
+                            time.sleep(delay * (attempt + 1))  # 指数退避
+                            continue
+                    raise e
+                except Exception as e:
+                    raise e
+            raise last_exception
+        return wrapper
+    return decorator
 
 
 class UserService:
@@ -49,10 +75,12 @@ class UserService:
         except jwt.InvalidTokenError:
             return {'error': 'Token无效'}
     
+    @db_retry(max_retries=3, delay=1)
     def create_or_get_user_by_phone(self, phone_number):
         """通过手机号创建或获取用户"""
+        session = None
         try:
-            session = self._get_session()
+            session = get_session()  # 每次都获取新的会话
             
             # 查找现有用户
             user = session.query(User).filter_by(telephone=phone_number).first()
@@ -80,11 +108,16 @@ class UserService:
             if session:
                 session.rollback()
             return None
+        finally:
+            # 确保会话被正确关闭
+            if session:
+                session.close()
     
     def authenticate_user(self, account, password):
         """用户名/邮箱密码认证"""
+        session = None
         try:
-            session = self._get_session()
+            session = get_session()  # 每次都获取新的会话
             
             # 支持用户名、邮箱、手机号登录
             user = session.query(User).filter(
@@ -103,6 +136,10 @@ class UserService:
         except Exception as e:
             print(f"❌ 用户认证异常: {e}")
             return None
+        finally:
+            # 确保会话被正确关闭
+            if session:
+                session.close()
     
     def wechat_login(self, code):
         """微信登录"""

@@ -34,7 +34,7 @@ class DatabaseManager:
             blocking=True,
             maxusage=None,
             setsession=[],
-            ping=0,
+            ping=1,  # 启用连接检查，1表示每次使用前检查连接
             host=config['host'],
             port=config['port'],
             user=config['user'],
@@ -52,8 +52,10 @@ class DatabaseManager:
             poolclass=QueuePool,
             pool_size=10,
             max_overflow=20,
-            pool_pre_ping=True,
-            pool_recycle=3600
+            pool_pre_ping=True,  # 每次连接前检查连接是否有效
+            pool_recycle=1800,   # 减少连接回收时间到30分钟
+            pool_timeout=30,     # 获取连接的超时时间
+            echo=False           # 生产环境关闭SQL日志
         )
         
         # 创建会话工厂
