@@ -9,6 +9,7 @@ from io import BytesIO
 from services.DeepSeek import DeepseekAPI
 from services.SparkPractice import AIPracticeAPI
 from services.SparkMbti import AIMbtiAPI
+from services.SparkResumeRefination import AIResumeRefinationAPI
 import os
 from . import practice_bp
 
@@ -228,9 +229,20 @@ def handle_resume():
         print(f"📄 处理简历文件: {file.filename}")
         print(f"📝 简历内容长度: {len(content)} 字符")
         
-        # 使用DeepSeek API进行分析
-        deepseek = DeepseekAPI.getInstance()
-        response = deepseek.chat_return_json(enhanced_prompt)
+        # # 使用DeepSeek API进行分析
+        # deepseek = DeepseekAPI.getInstance()
+        # response = deepseek.chat_return_json(enhanced_prompt)
+        
+        # 使用简历优化API进行分析
+        AIResumeRefination = AIResumeRefinationAPI.getInstance()
+        response_content = AIResumeRefination.get_answer(enhanced_prompt)
+        
+        # 创建与DeepSeek API兼容的响应对象
+        class ResumeResponse:
+            def __init__(self, content):
+                self.content = content
+        
+        response = ResumeResponse(response_content) if response_content else None
         
         if response and response.content:
             try:

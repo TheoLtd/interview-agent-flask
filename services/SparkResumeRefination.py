@@ -1,27 +1,17 @@
 import http.client
 import json
 from flask import current_app
-# API_KEY = "9f638064e25b1ae24d828e89c1b21026"
-# API_SECRET = "Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3"
-# "flow_id": "7341661804480536578"
-
-# print("a")
-# headers = {
-#     "Content-Type": "application/json",
-#     "Accept": "text/event-stream",
-#     "Authorization": f"Bearer {API_KEY}:{API_SECRET}",
-# }
 
 
-class AIPracticeAPI():
+class AIResumeRefinationAPI():
     _instance = None
 
     def __init__(self):
-        self.name = "简历出题助手"
+        self.name = "简历优化助手"
 
     def get_answer(self, prompt, max_retries=3):
-        api_key = current_app.config['SPARK_PRACTICE_API']['api_key']
-        api_secret = current_app.config['SPARK_PRACTICE_API']['api_secret']
+        api_key = current_app.config['RESUME_REFINATION_API']['api_key']
+        api_secret = current_app.config['RESUME_REFINATION_API']['api_secret']
 
         headers = {
             "Content-Type": "application/json",
@@ -30,13 +20,13 @@ class AIPracticeAPI():
 
         # 创建HTTPS连接
         agent_client = http.client.HTTPSConnection(
-            current_app.config['SPARK_PRACTICE_API']['host'],
+            current_app.config['RESUME_REFINATION_API']['host'],
             timeout=120
         )
 
         # 准备请求数据
         data = {
-            "flow_id": current_app.config['SPARK_PRACTICE_API']['flow_id'],
+            "flow_id": current_app.config['RESUME_REFINATION_API']['flow_id'],
             "uid": "123",
             "parameters": {"AGENT_USER_INPUT": prompt},
             "ext": {},
@@ -48,7 +38,7 @@ class AIPracticeAPI():
             # 发送请求
             agent_client.request(
                 "POST",
-                current_app.config['SPARK_PRACTICE_API'].get('path', '/workflow/v1/chat/completions'),
+                current_app.config['RESUME_REFINATION_API'].get('path', '/workflow/v1/chat/completions'),
                 payload,
                 headers
             )
@@ -96,7 +86,7 @@ class AIPracticeAPI():
             return error_msg
 
     @classmethod
-    def getInstance(cls) -> "AIPracticeAPI":
+    def getInstance(cls) -> "AIResumeRefinationAPI":
         if cls._instance is None:
-            cls._instance = AIPracticeAPI()
-        return cls._instance
+            cls._instance = AIResumeRefinationAPI()
+        return cls._instance 

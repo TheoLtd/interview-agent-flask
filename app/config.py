@@ -52,14 +52,14 @@ class Config:
     SPARK_PRACTICE_API = {
         'host': 'xingchen-api.xf-yun.com',
         'path': '/workflow/v1/chat/completions',
-        # 'api_key': '9f638064e25b1ae24d828e89c1b21026',
-        'api_key': '253673d89c9e36cba2fb4aa83c30977a',
-        # 'api_secret': 'Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3',
-        'api_secret': 'ZTE0ZmU1MzNiZjlhNTgxNTExYWU3YTcw',
-        # 'flow_id': '7341661804480536578'
-        'flow_id': '7347256464096796674'
+        'api_key': '9f638064e25b1ae24d828e89c1b21026',
+        # 'api_key': '253673d89c9e36cba2fb4aa83c30977a',
+        'api_secret': 'Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3',
+        # 'api_secret': 'ZTE0ZmU1MzNiZjlhNTgxNTExYWU3YTcw',
+        'flow_id': '7341661804480536578'
+        # 'flow_id': '7347256464096796674'
     }
-    
+
     RESUME_REFINATION_API = {
         'host': 'xingchen-api.xf-yun.com',
         'path': '/workflow/v1/chat/completions',
@@ -86,14 +86,14 @@ class Config:
 
     MINI_PROGRAM_INFO = {
         'WECHAT_APPID' : "wx08a49c2b8918c480",
-        # check the secret 
+        # check the secret
         'WECHAT_SECRET' : "d5b0c6f8e4a3c2e6f4f9e1b8a2c7d4e5",
     }
-    
+
     SPUG_API = {
         'ID' : 'My5R7m0knl8V2DgG'
     }
-    
+
     # Redis配置
     REDIS_CONFIG = {
         'enabled': os.environ.get('REDIS_ENABLED', 'false').lower() == 'true',  # 默认不启用Redis
