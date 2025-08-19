@@ -37,11 +37,23 @@ def handle_answer():
     return Response(generate_response(), mimetype='text/event-stream')
 
 
-@practice_bp.route('/answer_v1', methods=['GET'])
+@practice_bp.route('/answer_v1', methods=['GET', 'POST'])
 def handle_answer_v1():
-    user_message = request.args.get('prompt', default="", type=str)
+    # 支持GET和POST两种方式
+    if request.method == 'POST':
+        # POST方式：从请求体获取数据
+        if request.is_json:
+            user_message = request.json.get('prompt', '')
+        else:
+            user_message = request.form.get('prompt', '')
+    else:
+        # GET方式：从URL参数获取数据（保持向后兼容）
+        user_message = request.args.get('prompt', default="", type=str)
+    
     if not user_message:
         return jsonify({'error': 'No message provided'}), 400
+    
+    print(f"📝 刷题对话 - 消息长度: {len(user_message)} 字符")
     
     if user_message:
         AIPractice = AIPracticeAPI.getInstance()
@@ -50,21 +62,31 @@ def handle_answer_v1():
         if res:
             return jsonify({'content': res})
         else:
-            return jsonify({'error': 'Deepseek API error'}), 500
+            return jsonify({'error': 'AIPractice API error'}), 500
 
 
-@practice_bp.route('/evaluate', methods=['GET'])
+@practice_bp.route('/evaluate', methods=['GET', 'POST'])
 def evaluate():
-    history_data = request.args.get('historyData', default="", type=str)
+    # 支持GET和POST两种方式
+    if request.method == 'POST':
+        # POST方式：从请求体获取数据
+        if request.is_json:
+            history_data = request.json.get('historyData', '')
+        else:
+            history_data = request.form.get('historyData', '')
+    else:
+        # GET方式：从URL参数获取数据（保持向后兼容）
+        history_data = request.args.get('historyData', default="", type=str)
+    
     if not history_data:
         return jsonify({'error': 'No history_data provided'}), 400
     
-    print(history_data)
+    print(f"📊 历史数据长度: {len(history_data)} 字符")
     prompt = '''请根据我的根据历史刷题记录分析我的薄弱环节、高频错误点，并给出针对性的提升策略（如重点练习哪些题型、时间管理建议等）。要求分析简洁清晰，建议可操作性强。
                 以下是我的历史刷题记录：
                 <{}>
              '''.format(history_data)
-    print(prompt)
+    
     if history_data:
         Deepseek = DeepseekAPI.getInstance()
         res = Deepseek.safe_generate_content_deepseek2(prompt)
@@ -78,11 +100,21 @@ def evaluate():
 
 @practice_bp.route('/evaluate_v2', methods=['GET'])
 def evaluate_stream():
-    history_data = request.args.get('historyData', default="", type=str)
+    # 支持GET和POST两种方式
+    if request.method == 'POST':
+        # POST方式：从请求体获取数据
+        if request.is_json:
+            history_data = request.json.get('historyData', '')
+        else:
+            history_data = request.form.get('historyData', '')
+    else:
+        # GET方式：从URL参数获取数据（保持向后兼容）
+        history_data = request.args.get('historyData', default="", type=str)
+    
     if not history_data:
         return jsonify({'error': 'No history_data provided'}), 400
     
-    print(history_data)
+    print(f"📊 流式评估 - 历史数据长度: {len(history_data)} 字符")
     prompt = '''请根据我的历史刷题记录分析我的薄弱环节、高频错误点，并给出针对性的提升策略（如重点练习哪些题型、时间管理建议等）。要求分析简洁清晰，建议可操作性强。
                 以下是我的历史刷题记录：
                 <{}>
@@ -291,12 +323,24 @@ def handle_resume():
         }), 500
 
 
-@practice_bp.route('/mbti_test', methods=['GET'])
+@practice_bp.route('/mbti_test', methods=['GET', 'POST'])
 def mbti_test():
-    user_message = request.args.get('prompt', default="", type=str).strip()
+    # 支持GET和POST两种方式
+    if request.method == 'POST':
+        # POST方式：从请求体获取数据
+        if request.is_json:
+            user_message = request.json.get('prompt', '').strip()
+        else:
+            user_message = request.form.get('prompt', '').strip()
+    else:
+        # GET方式：从URL参数获取数据（保持向后兼容）
+        user_message = request.args.get('prompt', default="", type=str).strip()
+    
     # 如果用户未提供额外信息，给予默认提示，方便模型自行发问或直接给出结果
     if not user_message:
         user_message = "（用户暂未提供额外信息，请先提出合适的问题或根据通用情况预测 MBTI 类型）"
+
+    print(f"🧠 MBTI测试 - 消息长度: {len(user_message)} 字符")
 
     # 构造 Prompt，将用户输入拼接进去
     mbti_prompt = f"""你是一名专业心理测评师，请参考下方用户信息判断其可能的 MBTI 类型，并给出简要的类型解析与职业建议；若用户信息不足，可先给出不超过 10 道带选项的问题，随后直接给出最终结论。
