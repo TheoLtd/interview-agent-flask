@@ -1,6 +1,7 @@
 import http.client
 import json
 from flask import current_app
+import uuid
 # API_KEY = "9f638064e25b1ae24d828e89c1b21026"
 # API_SECRET = "Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3"
 # "flow_id": "7341661804480536578"
@@ -18,6 +19,8 @@ class AIPracticeAPI():
 
     def __init__(self):
         self.name = "简历出题助手"
+        self.session_id = str(uuid.uuid4())
+        print("已创建刷题助手, 会话id{0}".format(self.session_id))
 
     def get_answer(self, prompt, max_retries=3):
         api_key = current_app.config['SPARK_PRACTICE_API']['api_key']
@@ -38,6 +41,7 @@ class AIPracticeAPI():
         data = {
             "flow_id": current_app.config['SPARK_PRACTICE_API']['flow_id'],
             "uid": "123",
+            "session_id": self.session_id,
             "parameters": {"AGENT_USER_INPUT": prompt},
             "ext": {},
             "stream": False,

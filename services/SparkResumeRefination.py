@@ -1,6 +1,7 @@
 import http.client
 import json
 from flask import current_app
+import uuid
 
 
 class AIResumeRefinationAPI():
@@ -8,6 +9,8 @@ class AIResumeRefinationAPI():
 
     def __init__(self):
         self.name = "简历优化助手"
+        self.session_id = str(uuid.uuid4())
+        print("已创建简历优化助手, 会话id{0}".format(self.session_id))
 
     def get_answer(self, prompt, max_retries=3):
         api_key = current_app.config['RESUME_REFINATION_API']['api_key']
@@ -28,6 +31,7 @@ class AIResumeRefinationAPI():
         data = {
             "flow_id": current_app.config['RESUME_REFINATION_API']['flow_id'],
             "uid": "123",
+            "session_id" : self.session_id,
             "parameters": {"AGENT_USER_INPUT": prompt},
             "ext": {},
             "stream": False,
@@ -89,4 +93,4 @@ class AIResumeRefinationAPI():
     def getInstance(cls) -> "AIResumeRefinationAPI":
         if cls._instance is None:
             cls._instance = AIResumeRefinationAPI()
-        return cls._instance 
+        return cls._instance
