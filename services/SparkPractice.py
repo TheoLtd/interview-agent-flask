@@ -45,6 +45,7 @@ class AIPracticeAPI():
         payload = json.dumps(data)
 
         try:
+            print("Start Sending to Spark Practice API...")
             # 发送请求
             agent_client.request(
                 "POST",
@@ -56,7 +57,7 @@ class AIPracticeAPI():
 
             # 检查HTTP状态
             if res.status != 200:
-                error_msg = f"API错误: HTTP {res.status} {res.reason}"
+                error_msg = f"Spark Practice API错误: HTTP {res.status} {res.reason}"
                 current_app.logger.error(error_msg)
                 return error_msg
 
@@ -68,7 +69,7 @@ class AIPracticeAPI():
             if "code" in response_data and response_data["code"] != 0:
                 error_code = response_data["code"]
                 error_msg = response_data.get("message", "未知错误")
-                current_app.logger.error(f"API错误 ({error_code}): {error_msg}")
+                current_app.logger.error(f"Spark Practice API错误 ({error_code}): {error_msg}")
                 return f"API错误 ({error_code}): {error_msg}"
 
             # 解析响应内容
@@ -84,11 +85,11 @@ class AIPracticeAPI():
                 return response_data["content"]
 
             # 无法解析响应
-            current_app.logger.error(f"无法解析API响应: {response_data}")
-            return "错误: 无法解析API响应"
+            current_app.logger.error(f"无法解析Spark Practice API响应: {response_data}")
+            return "错误: 无法解析Spark Practice API响应"
 
         except Exception as e:
-            error_msg = f"API调用失败: {str(e)}"
+            error_msg = f"Spark Practice API调用失败: {str(e)}"
             current_app.logger.error(error_msg)
             if max_retries > 0:
                 current_app.logger.info(f"重试中... ({max_retries} 次剩余)")
