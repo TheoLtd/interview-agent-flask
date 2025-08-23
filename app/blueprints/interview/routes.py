@@ -250,6 +250,9 @@ def init_shuziren():
     """
     初始化数字人，优化版本 - 减少FFmpeg初始化时间
     """
+    
+    cleanup_avatar()
+    
     # 在每次初始化数字人时，先清空上一轮生成的 HLS 缓存文件，避免旧切片干扰
     project_root = os.path.dirname(current_app.root_path)
     stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
@@ -310,16 +313,9 @@ def init_shuziren():
         import platform
         is_server = platform.system() == 'Linux' or 'server' in platform.node().lower()
         
-        if is_server:
-            print("检测到服务器环境，使用稳定版FFmpeg配置")
-            # ffmpeg_process = rtmp_to_hls_stable_fast(wsclient.streamUrl, hls_file_path_abs)
-            # print("使用超稳定版FFmpeg配置解决闪烁问题")
-            # ffmpeg_process = rtmp_to_hls_rock_solid(wsclient.streamUrl, hls_file_path_abs)
-            print("检测到服务器环境，使用网络增强版FFmpeg配置")
-            ffmpeg_process = rtmp_to_hls_network_enhanced(wsclient.streamUrl, hls_file_path_abs)
-        else:
-            print("使用快速版FFmpeg配置")
-            ffmpeg_process = rtmp_to_hls_fast(wsclient.streamUrl, hls_file_path_abs)
+        # 统一使用优化快速版FFmpeg配置
+        print("使用优化快速版FFmpeg配置")
+        ffmpeg_process = rtmp_to_hls_fast_optimized(wsclient.streamUrl, hls_file_path_abs)
         
         if ffmpeg_process is None:
             raise Exception("FFmpeg启动失败")
@@ -391,7 +387,8 @@ def get_session_status():
             'session_active': False,
             'remaining_time': 0,
             'elapsed_time': 0,
-            'message': '会话未启动'
+            'message': '会话未启动',
+            'data': None
         })
     
     if wsclient.is_session_expired():
@@ -399,11 +396,26 @@ def get_session_status():
             'session_active': False,
             'remaining_time': 0,
             'elapsed_time': wsclient.get_session_elapsed_time(),
-            'message': '会话已超时'
+            'message': '会话已超时',
+            'data': None
         })
     
     remaining_time = wsclient.get_session_remaining_time()
     elapsed_time = wsclient.get_session_elapsed_time()
+    
+    # 检查HLS文件状态
+    project_root = os.path.dirname(current_app.root_path)
+    hls_file_path = os.path.join(project_root, 'resource', 'stream', 'playlist.m3u8')
+    stream_ready = os.path.exists(hls_file_path)
+    
+    # 构建完整的会话数据
+    session_data = {
+        'session_id': getattr(wsclient, 'session_id', None),
+        'stream_url': getattr(wsclient, 'streamUrl', None),
+        'websocket_url': getattr(wsclient, 'websocketUrl', None),
+        'stream_ready': stream_ready,
+        'hls_path': '/interview/video/playlist.m3u8' if stream_ready else None
+    }
     
     return jsonify({
         'session_active': True,
@@ -411,9 +423,9 @@ def get_session_status():
         'elapsed_time': elapsed_time,
         'remaining_minutes': round(remaining_time / 60, 1),
         'elapsed_minutes': round(elapsed_time / 60, 1),
-        'message': f'会话活跃，剩余时间: {round(remaining_time / 60, 1)}分钟'
+        'message': f'会话活跃，剩余时间: {round(remaining_time / 60, 1)}分钟',
+        'data': session_data
     })
-
 
 @interview_bp.route('/end_session', methods=['POST'])
 def end_session():
@@ -515,7 +527,186 @@ def rtmp_to_hls_fast(input_rtmp_url, output_hls_path):
         return None
 
 
-def rtmp_to_hls_stable_fast(input_rtmp_url, output_hls_path):
+def rtmp_to_hls_fast_optimized(input_rtmp_url, output_hls_path):
+    """
+    优化快速版本
+    适合生产和开发环境统一使用
+    """
+    
+    # 验证和清理输入URL
+    print(f"🔍 FFmpeg接收到的URL: {input_rtmp_url}")
+    
+    # 确保URL格式正确
+    if not input_rtmp_url.startswith('rtmp://'):
+        print(f"❌ 错误的URL格式: {input_rtmp_url}")
+        return None
+    
+    # 解析RTMP URL的各个部分
+    try:
+        # 移除查询参数
+        base_url = input_rtmp_url.split('?')[0] if '?' in input_rtmp_url else input_rtmp_url
+        
+        # 解析URL各个部分
+        url_parts = base_url.replace('rtmp://', '').split('/')
+        host_port = url_parts[0]
+        app_name = url_parts[1] if len(url_parts) > 1 else 'live'
+        stream_key = url_parts[2] if len(url_parts) > 2 else ''
+        
+        # 重构RTMP URL
+        clean_rtmp_url = f"rtmp://{host_port}/{app_name}/{stream_key}"
+        print(f"🔧 RTMP URL解析结果:")
+        print(f"   主机端口: {host_port}")
+        print(f"   应用名称: {app_name}")
+        print(f"   流密钥: {stream_key}")
+        print(f"   清理后URL: {clean_rtmp_url}")
+        
+        input_rtmp_url = clean_rtmp_url
+    except Exception as e:
+        print(f"⚠️ RTMP URL解析失败: {e}")
+        return None
+    
+    # 确保输出目录存在并清理
+    try:
+        output_dir = os.path.dirname(output_hls_path)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # 清理旧的HLS文件（使用安全的文件删除方法）
+        safe_delete_hls_files(output_dir)
+        
+    except Exception as e:
+        print(f"⚠️ 目录操作失败: {e}")
+    
+    ffmpeg_cmd = [
+        'ffmpeg',
+        '-y',                              # 覆盖现有文件
+        '-loglevel', 'warning',               # 详细日志便于调试
+        
+        # RTMP输入参数
+        '-re',                             # 实时模式
+        '-stream_loop', '-1',              # 无限循环（如果流中断）
+        '-i', input_rtmp_url,              # 输入源
+        
+        # 视频编码参数
+        '-c:v', 'libx264',                 # 视频编码器
+        '-preset', 'ultrafast',            # 最快编码预设
+        '-tune', 'zerolatency',            # 零延迟调优
+        '-profile:v', 'baseline',          # 基线配置
+        '-level', '3.0',                   # H.264级别
+        '-x264-params', 'nal-hrd=cbr:force-cfr=1', # 恒定比特率+强制恒定帧率
+        '-maxrate', '1000k',               # 最大比特率
+        '-bufsize', '500k',                # 缓冲区大小
+        '-r', '25',                        # 固定帧率25fps
+        '-g', '25',                        # GOP大小25（1秒）
+        '-keyint_min', '25',               # 最小关键帧间隔
+        '-sc_threshold', '0',              # 禁用场景检测
+        
+        # 音频编码参数
+        '-c:a', 'aac',                     # 音频编码器
+        '-ac', '2',                        # 立体声
+        '-ar', '44100',                    # 音频采样率
+        '-b:a', '128k',                    # 音频比特率
+        
+        # HLS输出参数
+        '-f', 'hls',                       # HLS格式
+        '-hls_time', '2',                  # 2秒切片
+        '-hls_list_size', '6',             # 保留6个切片
+        '-hls_flags', 'delete_segments+append_list+split_by_time+program_date_time',
+        '-hls_segment_type', 'mpegts',     # TS格式
+        '-hls_allow_cache', '0',           # 禁用缓存
+        '-start_number', '0',              # 从0开始
+        output_hls_path                    # 输出路径
+    ]
+    
+    try:
+        # 确保日志目录存在
+        log_dir = os.path.join('log', 'ffmpeg_log')
+        os.makedirs(log_dir, exist_ok=True)
+
+        # 创建日志文件
+        timestamp = int(time.time())
+        log_file_name = f"ffmpeg_fast_optimized_{timestamp}.log"
+        log_file_path = os.path.join(log_dir, log_file_name)
+
+        print(f"启动优化快速版FFmpeg进程，日志: {log_file_path}")
+        print(f"🎯 最终RTMP URL: {input_rtmp_url}")
+        print(f"📂 输出目录: {output_dir}")
+        print(f"📄 输出文件: {output_hls_path}")
+
+        # 启动FFmpeg进程
+        with open(log_file_path, 'w', encoding='utf-8') as log_file:
+            process = subprocess.Popen(
+                ffmpeg_cmd,
+                stdout=subprocess.PIPE,
+                stderr=log_file,
+                bufsize=1,
+                universal_newlines=True
+            )
+
+        # 等待HLS文件生成
+        max_wait = 15  # 最多等待15秒
+        start_time = time.time()
+        while time.time() - start_time < max_wait:
+            if os.path.exists(output_hls_path):
+                with open(output_hls_path, 'r') as f:
+                    content = f.read()
+                    if '.ts' in content:  # 确保至少有一个切片生成
+                        print(f"✅ HLS文件已生成并包含切片: {output_hls_path}")
+                        return process
+            time.sleep(0.5)
+        
+        print(f"⚠️ 等待HLS文件超时: {output_hls_path}")
+        return process
+
+    except Exception as e:
+        print(f"❌ 启动FFmpeg进程失败: {e}")
+        return None
+
+def safe_delete_hls_files(directory):
+    """
+    安全地删除HLS相关文件
+    """
+    try:
+        # 获取目录中的所有文件
+        files = glob.glob(os.path.join(directory, '*'))
+        
+        for f in files:
+            try:
+                # 只删除.ts和.m3u8文件
+                if f.endswith('.ts') or f.endswith('.m3u8'):
+                    try:
+                        os.remove(f)
+                        print(f"🧹 清理文件: {f}")
+                    except PermissionError:
+                        print(f"⚠️ 文件正在使用中，跳过: {f}")
+                    except Exception as e:
+                        print(f"⚠️ 删除文件失败: {f} - {e}")
+            except Exception as e:
+                print(f"⚠️ 处理文件失败: {f} - {e}")
+                
+    except Exception as e:
+        print(f"⚠️ 清理目录失败: {directory} - {e}")
+
+def delete_files_in_folder(folder_path):
+    """
+    删除文件夹中的文件（带重试机制）
+    """
+    max_retries = 3
+    retry_delay = 1  # 秒
+    
+    for retry in range(max_retries):
+        try:
+            safe_delete_hls_files(folder_path)
+            return
+        except Exception as e:
+            if retry < max_retries - 1:
+                print(f"⚠️ 删除文件失败，将在{retry_delay}秒后重试: {e}")
+                time.sleep(retry_delay)
+            else:
+                print(f"❌ 删除文件最终失败: {e}")
+                break
+
+
+def rtmp_to_hls_stable_fast_deprecated(input_rtmp_url, output_hls_path):
     """
     优化稳定版本 - 在保持稳定性的同时减少初始化时间
     """
@@ -556,12 +747,9 @@ def rtmp_to_hls_stable_fast(input_rtmp_url, output_hls_path):
         '-hls_segment_filename', os.path.join(os.path.dirname(output_hls_path), 'seg_%03d.ts'),
         '-start_number', '0',              # 从0开始
         '-avoid_negative_ts', 'make_zero', # 避免负时间戳
-        '-g', '25',                        # 减少GOP大小加快启动
-        '-keyint_min', '12',               # 减少关键帧间隔
-        '-sc_threshold', '0',              # 禁用场景检测
-        '-force_key_frames', 'expr:gte(t,n_forced*1.5)', # 每1.5秒强制关键帧
-        '-vsync', '1',                     # 视频同步
-        '-async', '1',                     # 音频同步
+        '-vsync', 'cfr',                   # 恒定帧率
+        '-map', '0:v:0',                   # 映射第一个视频流
+        '-map', '0:a:0',                   # 映射第一个音频流
         '-shortest',                       # 最短流结束时停止
         output_hls_path                    # 输出路径
     ]
@@ -951,202 +1139,6 @@ def delete_files_in_folder(folder_path):
             os.remove(f)
 
 
-@interview_bp.route('/configure_latency', methods=['POST'])
-def configure_latency():
-    """
-    配置流媒体延迟模式
-    """
-    data = request.get_json()
-    low_latency = data.get('low_latency', True)
-    
-    global wsclient
-    if wsclient is None:
-        return jsonify({
-            'success': False,
-            'message': '数字人未初始化'
-        }), 400
-    
-    try:
-        # 重新启动流媒体处理
-        project_root = os.path.dirname(current_app.root_path)
-        hls_file_path_abs = os.path.join(project_root, 'resource', 'stream', 'playlist.m3u8')
-        
-        # 停止现有的ffmpeg进程（如果有的话）
-        # 这里需要添加进程管理逻辑
-        
-        # 使用新配置重启流媒体
-        rtmp_to_hls(wsclient.streamUrl, hls_file_path_abs, low_latency=low_latency)
-        
-        return jsonify({
-            'success': True,
-            'message': f'已切换到{"低延迟" if low_latency else "标准"}模式',
-            'low_latency': low_latency
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'配置失败: {str(e)}'
-        }), 500
-
-
-@interview_bp.route('/latency_info', methods=['GET'])
-def get_latency_info():
-    """
-    获取延迟相关信息和建议
-    """
-    global wsclient
-    
-    if wsclient is None:
-        return jsonify({
-            'connected': False,
-            'message': '数字人未连接'
-        })
-    
-    # 检查HLS文件状态
-    project_root = os.path.dirname(current_app.root_path)
-    hls_file_path = os.path.join(project_root, 'resource', 'stream', 'playlist.m3u8')
-    
-    hls_exists = os.path.exists(hls_file_path)
-    segment_count = 0
-    latest_segment_time = None
-    
-    if hls_exists:
-        try:
-            # 读取播放列表信息
-            with open(hls_file_path, 'r') as f:
-                content = f.read()
-                segment_count = content.count('.ts')
-            
-            # 获取最新片段的修改时间
-            stream_dir = os.path.dirname(hls_file_path)
-            ts_files = [f for f in os.listdir(stream_dir) if f.endswith('.ts')]
-            if ts_files:
-                latest_ts = max(ts_files, key=lambda x: os.path.getmtime(os.path.join(stream_dir, x)))
-                latest_segment_time = os.path.getmtime(os.path.join(stream_dir, latest_ts))
-        except Exception as e:
-            print(f"读取HLS信息时出错: {e}")
-    
-    # 计算估算延迟
-    estimated_latency = "未知"
-    if segment_count > 0:
-        # 基于片段数量和时长估算延迟
-        segment_duration = 1  # 假设使用1秒切片
-        buffer_segments = max(3, segment_count)  # 缓冲片段数
-        estimated_latency = f"{buffer_segments * segment_duration}秒"
-    
-    # 延迟优化建议
-    recommendations = []
-    if segment_count > 5:
-        recommendations.append("建议启用低延迟模式减少缓冲片段")
-    if latest_segment_time and time.time() - latest_segment_time > 5:
-        recommendations.append("检测到片段更新延迟，可能存在网络问题")
-    
-    return jsonify({
-        'connected': True,
-        'stream_url': wsclient.streamUrl,
-        'hls_available': hls_exists,
-        'segment_count': segment_count,
-        'estimated_latency': estimated_latency,
-        'latest_segment_age': time.time() - latest_segment_time if latest_segment_time else None,
-        'recommendations': recommendations,
-        'session_time': wsclient.get_session_elapsed_time() if wsclient else 0
-    })
-
-
-@interview_bp.route('/optimize_playback', methods=['GET'])
-def get_playback_optimization():
-    """
-    获取前端播放器优化配置
-    """
-    return jsonify({
-        'hls_config': {
-            'lowLatencyMode': True,
-            'liveBackBufferLength': 3,    # 后缓冲长度（秒）
-            'liveSyncDurationCount': 1,   # 同步持续时间计数
-            'liveMaxLatencyDurationCount': 3,  # 最大延迟持续时间计数
-            'manifestLoadingTimeOut': 2000,    # 清单加载超时（毫秒）
-            'manifestLoadingMaxRetry': 2,      # 清单加载最大重试次数
-            'levelLoadingTimeOut': 2000,       # 级别加载超时（毫秒）
-            'fragLoadingTimeOut': 4000,        # 片段加载超时（毫秒）
-            'startLevel': -1,                  # 起始质量级别（-1为自动）
-            'autoStartLoad': True,             # 自动开始加载
-            'startPosition': -1,               # 起始位置（-1为直播边缘）
-            'enableWorker': True,              # 启用Web Worker
-            'lowLatencyMode': True,            # 低延迟模式
-            'backBufferLength': 10             # 后缓冲长度
-        },
-        'player_settings': {
-            'preload': 'auto',
-            'autoplay': True,
-            'muted': True,  # 现代浏览器自动播放要求
-            'controls': True,
-            'playsinline': True,
-            'crossorigin': 'anonymous'
-        },
-        'optimization_tips': [
-            "使用较小的切片时长(1-2秒)",
-            "减少播放列表中的片段数量",
-            "启用播放器的低延迟模式",
-            "优化网络连接质量",
-            "使用CDN加速流媒体传输"
-        ]
-    })
-
-
-@interview_bp.route('/check_hls_status', methods=['GET'])
-def check_hls_status():
-    """
-    检查HLS流状态 - 供前端轮询使用
-    """
-    project_root = os.path.dirname(current_app.root_path)
-    hls_file_path = os.path.join(project_root, 'resource', 'stream', 'playlist.m3u8')
-    
-    status = {
-        'hls_exists': False,
-        'segments_count': 0,
-        'latest_segment_age': None,
-        'ready_for_playback': False,
-        'stream_health': 'unknown'
-    }
-    
-    try:
-        if os.path.exists(hls_file_path):
-            status['hls_exists'] = True
-            
-            # 读取播放列表内容
-            with open(hls_file_path, 'r') as f:
-                content = f.read()
-                # 计算切片数量
-                segments = [line for line in content.split('\n') if line.endswith('.ts')]
-                status['segments_count'] = len(segments)
-                
-                # 检查是否有足够的切片可以开始播放
-                if len(segments) >= 2:  # 至少2个切片才开始播放
-                    status['ready_for_playback'] = True
-                    status['stream_health'] = 'good'
-                elif len(segments) >= 1:
-                    status['stream_health'] = 'initializing'
-                else:
-                    status['stream_health'] = 'waiting'
-            
-            # 检查最新切片的时间
-            stream_dir = os.path.dirname(hls_file_path)
-            ts_files = [f for f in os.listdir(stream_dir) if f.endswith('.ts')]
-            if ts_files:
-                latest_ts = max(ts_files, key=lambda x: os.path.getmtime(os.path.join(stream_dir, x)))
-                latest_time = os.path.getmtime(os.path.join(stream_dir, latest_ts))
-                status['latest_segment_age'] = time.time() - latest_time
-                
-                # 如果最新切片超过5秒，可能有问题
-                if status['latest_segment_age'] > 5:
-                    status['stream_health'] = 'stale'
-        
-    except Exception as e:
-        print(f"检查HLS状态时出错: {e}")
-        status['stream_health'] = 'error'
-    
-    return jsonify(status)
-
 
 @interview_bp.route('/preload_avatar', methods=['POST'])
 def preload_avatar():
@@ -1160,7 +1152,12 @@ def preload_avatar():
         return jsonify({
             'success': True,
             'message': 'Avatar连接已存在',
-            'preloaded': True
+            'preloaded': True,
+            'data': {
+                'session_id': getattr(wsclient, 'session_id', None),
+                'stream_url': wsclient.streamUrl,
+                'websocket_url': getattr(wsclient, 'websocketUrl', None)
+            }
         })
     
     try:
@@ -1183,24 +1180,70 @@ def preload_avatar():
         authUrl = AipaasAuth.assemble_auth_url(url, 'GET', appKey, appSecret)
         wsclient = avatarWebsocket(authUrl, protocols='', headers=None)
         
+        # 生成唯一的会话ID
+        session_id = f"avatar_{int(time.time())}_{os.urandom(4).hex()}"
+        wsclient.session_id = session_id
+        
         wsclient.appId = appId
         wsclient.anchorId = anchorId
         wsclient.vcn = vcn
         wsclient.start()
         
-        # 等待连接建立（不启动FFmpeg）
+        # 等待连接建立
         max_wait = 15
         start_time = time.time()
         while not wsclient.streamUrl and time.time() - start_time < max_wait:
             time.sleep(0.5)
         
         if wsclient.streamUrl:
-            return jsonify({
-                'success': True,
-                'message': 'Avatar预加载成功',
-                'preloaded': True,
-                'stream_url': wsclient.streamUrl
-            })
+            print(f"Avatar预加载成功，立即启动FFmpeg: {wsclient.streamUrl}")
+            
+            # 清理旧的HLS文件
+            project_root = os.path.dirname(current_app.root_path)
+            stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
+            delete_files_in_folder(stream_folder_abs)
+            
+            # 立即启动FFmpeg
+            hls_file_path_abs = os.path.join(stream_folder_abs, 'playlist.m3u8')
+            ffmpeg_process = rtmp_to_hls_fast_optimized(wsclient.streamUrl, hls_file_path_abs)
+            
+            if ffmpeg_process:
+                # 等待HLS文件生成
+                hls_ready = False
+                wait_start = time.time()
+                while time.time() - wait_start < 10:  # 最多等待10秒
+                    if os.path.exists(hls_file_path_abs):
+                        with open(hls_file_path_abs, 'r') as f:
+                            if '.ts' in f.read():
+                                hls_ready = True
+                                break
+                    time.sleep(0.5)
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Avatar预加载成功，数字人画面已就绪',
+                    'preloaded': True,
+                    'ffmpeg_started': True,
+                    'hls_ready': hls_ready,
+                    'data': {
+                        'session_id': session_id,
+                    'stream_url': wsclient.streamUrl,
+                        'websocket_url': getattr(wsclient, 'websocketUrl', None),
+                        'hls_path': '/interview/video/playlist.m3u8'
+                    }
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'message': 'Avatar预加载成功，但FFmpeg启动失败',
+                    'preloaded': True,
+                    'ffmpeg_started': False,
+                    'data': {
+                        'session_id': session_id,
+                        'stream_url': wsclient.streamUrl,
+                        'websocket_url': getattr(wsclient, 'websocketUrl', None)
+                    }
+                })
         else:
             return jsonify({
                 'success': False,
@@ -1214,412 +1257,66 @@ def preload_avatar():
         }), 500
 
 
-@interview_bp.route('/fast_start_hls', methods=['POST'])
-def fast_start_hls():
+@interview_bp.route('/use_preloaded_avatar', methods=['POST'])
+def use_preloaded_avatar():
     """
-    快速启动HLS - 基于已预加载的Avatar连接
-    """
-    global wsclient
-    
-    if wsclient is None or not wsclient.streamUrl:
-        return jsonify({
-            'success': False,
-            'message': 'Avatar未预加载，请先调用preload_avatar'
-        }), 400
-    
-    try:
-        # 清理旧的HLS文件
-        project_root = os.path.dirname(current_app.root_path)
-        stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
-        delete_files_in_folder(stream_folder_abs)
-        
-        # 立即启动FFmpeg
-        hls_file_path_abs = os.path.join(stream_folder_abs, 'playlist.m3u8')
-        ffmpeg_process = rtmp_to_hls_fast(wsclient.streamUrl, hls_file_path_abs)
-        
-        if ffmpeg_process is None:
-            return jsonify({
-                'success': False,
-                'message': 'FFmpeg启动失败'
-            }), 500
-        
-        return jsonify({
-            'success': True,
-            'message': 'HLS快速启动成功',
-            'stream_url': wsclient.streamUrl,
-            'hls_path': '/interview/video/playlist.m3u8',
-            'note': '请使用check_hls_status轮询检查HLS就绪状态'
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'快速启动失败: {str(e)}'
-        }), 500
-
-
-@interview_bp.route('/check_stream_health', methods=['GET'])
-def check_stream_health():
-    """
-    检查流媒体健康状态 - 用于诊断黑屏问题
-    """
-    global wsclient
-    
-    health_status = {
-        'avatar_connected': False,
-        'rtmp_stream_active': False,
-        'hls_generation_active': False,
-        'recent_segments': [],
-        'issues': [],
-        'recommendations': []
-    }
-    
-    try:
-        # 检查Avatar连接
-        if wsclient and wsclient.avatarLinked:
-            health_status['avatar_connected'] = True
-            if wsclient.streamUrl:
-                health_status['rtmp_stream_active'] = True
-        else:
-            health_status['issues'].append('Avatar未连接或连接不稳定')
-        
-        # 检查HLS文件状态
-        project_root = os.path.dirname(current_app.root_path)
-        hls_file_path = os.path.join(project_root, 'resource', 'stream', 'playlist.m3u8')
-        stream_dir = os.path.dirname(hls_file_path)
-        
-        if os.path.exists(hls_file_path):
-            health_status['hls_generation_active'] = True
-            
-            # 检查最近的切片文件
-            ts_files = [f for f in os.listdir(stream_dir) if f.endswith('.ts')]
-            if ts_files:
-                # 按修改时间排序
-                ts_files_with_time = [(f, os.path.getmtime(os.path.join(stream_dir, f))) for f in ts_files]
-                ts_files_with_time.sort(key=lambda x: x[1], reverse=True)
-                
-                current_time = time.time()
-                for file_name, mod_time in ts_files_with_time[:5]:  # 最近5个文件
-                    age = current_time - mod_time
-                    health_status['recent_segments'].append({
-                        'filename': file_name,
-                        'age_seconds': round(age, 1),
-                        'is_recent': age < 10  # 10秒内算新鲜
-                    })
-                
-                # 检查是否有陈旧的切片
-                latest_segment_age = ts_files_with_time[0][1]
-                if current_time - latest_segment_age > 10:
-                    health_status['issues'].append(f'最新切片已过时 {round(current_time - latest_segment_age, 1)}秒')
-                    health_status['recommendations'].append('重启FFmpeg进程')
-            else:
-                health_status['issues'].append('没有找到HLS切片文件')
-        else:
-            health_status['issues'].append('HLS播放列表文件不存在')
-        
-        # 检查FFmpeg进程状态
-        try:
-            import psutil
-            ffmpeg_processes = [p for p in psutil.process_iter(['pid', 'name', 'cmdline']) 
-                              if p.info['name'] and 'ffmpeg' in p.info['name'].lower()]
-            
-            if not ffmpeg_processes:
-                health_status['issues'].append('FFmpeg进程未运行')
-                health_status['recommendations'].append('重启数字人服务')
-            elif len(ffmpeg_processes) > 1:
-                health_status['issues'].append(f'检测到多个FFmpeg进程({len(ffmpeg_processes)}个)')
-                health_status['recommendations'].append('清理多余的FFmpeg进程')
-                
-        except ImportError:
-            health_status['recommendations'].append('安装psutil以进行进程监控')
-        
-        # 生成建议
-        if not health_status['issues']:
-            health_status['status'] = 'healthy'
-        elif len(health_status['issues']) <= 2:
-            health_status['status'] = 'warning'
-        else:
-            health_status['status'] = 'critical'
-    
-    except Exception as e:
-        health_status['issues'].append(f'健康检查出错: {str(e)}')
-        health_status['status'] = 'error'
-    
-    return jsonify(health_status)
-
-
-@interview_bp.route('/restart_stream', methods=['POST'])
-def restart_stream():
-    """
-    重启流媒体 - 解决黑屏问题
-    """
-    global wsclient
-    
-    try:
-        if wsclient is None or not wsclient.streamUrl:
-            return jsonify({
-                'success': False,
-                'message': 'Avatar未连接，无法重启流媒体'
-            }), 400
-        
-        # 清理旧的流文件
-        project_root = os.path.dirname(current_app.root_path)
-        stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
-        delete_files_in_folder(stream_folder_abs)
-        
-        # 等待一下确保文件清理完成
-        time.sleep(1)
-        
-        # 重启FFmpeg (使用稳定版本)
-        hls_file_path_abs = os.path.join(stream_folder_abs, 'playlist.m3u8')
-        ffmpeg_process = rtmp_to_hls_stable_fast(wsclient.streamUrl, hls_file_path_abs)
-        
-        if ffmpeg_process is None:
-            return jsonify({
-                'success': False,
-                'message': 'FFmpeg重启失败'
-            }), 500
-        
-        return jsonify({
-            'success': True,
-            'message': '流媒体重启成功',
-            'note': '请等待5-10秒后刷新播放器'
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'重启失败: {str(e)}'
-        }), 500
-
-
-@interview_bp.route('/enable_auto_recovery', methods=['POST'])
-def enable_auto_recovery():
-    """
-    启用自动恢复机制 - 监控流媒体健康状态并自动重启
+    使用预加载的数字人会话
     """
     data = request.get_json()
-    enabled = data.get('enabled', True)
+    session_id = data.get('session_id')
     
-    if enabled:
-        # 启动监控线程
-        monitoring_thread = threading.Thread(
-            target=stream_health_monitor,
-            daemon=True
-        )
-        monitoring_thread.start()
-        
+    if not session_id:
         return jsonify({
-            'success': True,
-            'message': '自动恢复机制已启用',
-            'monitoring': True
-        })
-    else:
-        # 这里可以添加停止监控的逻辑
-        return jsonify({
-            'success': True,
-            'message': '自动恢复机制已禁用',
-            'monitoring': False
-        })
-
-
-def stream_health_monitor():
-    """
-    流媒体健康监控线程 - 后台运行
-    """
-    consecutive_failures = 0
-    max_failures = 3
-    check_interval = 15  # 每15秒检查一次
+            'success': False,
+            'message': '缺少session_id参数'
+        }), 400
     
-    while True:
-        try:
-            time.sleep(check_interval)
-            
-            # 检查流媒体健康状态
-            global wsclient
-            if wsclient is None or not wsclient.avatarLinked:
-                continue
-            
-            # 检查HLS文件状态
-            project_root = os.path.dirname(current_app.root_path)
-            hls_file_path = os.path.join(project_root, 'resource', 'stream', 'playlist.m3u8')
-            stream_dir = os.path.dirname(hls_file_path)
-            
-            is_healthy = True
-            
-            if os.path.exists(hls_file_path):
-                # 检查最新切片时间
-                ts_files = [f for f in os.listdir(stream_dir) if f.endswith('.ts')]
-                if ts_files:
-                    latest_ts = max(ts_files, key=lambda x: os.path.getmtime(os.path.join(stream_dir, x)))
-                    latest_time = os.path.getmtime(os.path.join(stream_dir, latest_ts))
-                    
-                    # 如果最新切片超过30秒，认为不健康
-                    if time.time() - latest_time > 30:
-                        is_healthy = False
-                        print(f"检测到流媒体异常：最新切片已过时 {time.time() - latest_time:.1f}秒")
-                else:
-                    is_healthy = False
-                    print("检测到流媒体异常：没有切片文件")
-            else:
-                is_healthy = False
-                print("检测到流媒体异常：HLS播放列表不存在")
-            
-            if not is_healthy:
-                consecutive_failures += 1
-                print(f"流媒体健康检查失败 ({consecutive_failures}/{max_failures})")
-                
-                if consecutive_failures >= max_failures:
-                    print("触发自动恢复机制")
-                    try:
-                        # 自动重启流媒体
-                        delete_files_in_folder(stream_dir)
-                        time.sleep(2)
-                        
-                        # 重新启动FFmpeg
-                        hls_file_path_abs = os.path.join(stream_dir, 'playlist.m3u8')
-                        ffmpeg_process = rtmp_to_hls_stable_fast(wsclient.streamUrl, hls_file_path_abs)
-                        
-                        if ffmpeg_process:
-                            print("自动恢复成功")
-                            consecutive_failures = 0
-                        else:
-                            print("自动恢复失败")
-                    except Exception as e:
-                        print(f"自动恢复过程中出错: {e}")
-            else:
-                # 恢复正常，重置失败计数
-                if consecutive_failures > 0:
-                    print("流媒体健康状态已恢复")
-                consecutive_failures = 0
-                
-        except Exception as e:
-            print(f"健康监控线程出错: {e}")
-            time.sleep(5)
-
-
-@interview_bp.route('/get_stability_config', methods=['GET'])
-def get_stability_config():
-    """
-    获取流媒体稳定性配置建议
-    """
-    return jsonify({
-        'ffmpeg_settings': {
-            'stable_mode': {
-                'hls_time': 2,          # 2秒切片更稳定
-                'hls_list_size': 6,     # 保留更多切片
-                'reconnect': True,      # 启用重连
-                'fixed_framerate': 25,  # 固定帧率
-                'description': '适合服务器环境，稳定性优先'
-            },
-            'fast_mode': {
-                'hls_time': 1,          # 1秒切片低延迟
-                'hls_list_size': 3,     # 保留少量切片
-                'reconnect': False,     # 不重连
-                'variable_framerate': True,
-                'description': '适合本地环境，延迟优先'
-            }
-        },
-        'troubleshooting': {
-            'black_screen_alternating': [
-                '使用rtmp_to_hls_stable函数',
-                '启用自动恢复机制',
-                '检查服务器资源使用情况',
-                '增加FFmpeg缓冲区大小',
-                '使用固定比特率编码'
-            ],
-            'high_latency': [
-                '减少hls_time到1秒',
-                '减少hls_list_size到3',
-                '启用低延迟模式',
-                '优化网络连接'
-            ],
-            'connection_drops': [
-                '启用FFmpeg重连机制',
-                '增加探测时间',
-                '检查RTMP源稳定性',
-                '使用健康监控'
-            ]
-        },
-        'monitoring': {
-            'health_check_endpoint': '/interview/check_stream_health',
-            'auto_recovery_endpoint': '/interview/enable_auto_recovery',
-            'manual_restart_endpoint': '/interview/restart_stream'
-        }
-    })
-
-
-@interview_bp.route('/init_shuziren_quick', methods=['GET'])
-def init_shuziren_quick():
-    """
-    快速初始化数字人 - 立即返回，后台处理
-    """
     global wsclient
     
-    # 清理旧文件
-    project_root = os.path.dirname(current_app.root_path)
-    stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
-    delete_files_in_folder(stream_folder_abs)
-    
-    # 如果已有连接且未超时，立即启动FFmpeg
-    if wsclient is not None and not wsclient.is_session_expired() and wsclient.streamUrl:
-        threading.Thread(
-            target=quick_start_ffmpeg,
-            args=(wsclient.streamUrl, stream_folder_abs),
-            daemon=True
-        ).start()
-        
-        return jsonify({
-            'content': "true",
-            'mode': 'quick_start',
-            'message': '正在快速启动流媒体...',
-            'estimated_time': '8-15秒',
-            'check_status_url': '/interview/check_hls_status'
-        })
-    
-    # 如果没有连接，启动完整初始化流程（异步）
-    threading.Thread(
-        target=async_avatar_initialization,
-        daemon=True
-    ).start()
-    
-    return jsonify({
-        'content': "initializing",
-        'mode': 'full_init',
-        'message': '正在初始化数字人连接...',
-        'estimated_time': '15-25秒',
-        'check_status_url': '/interview/check_init_progress'
-    })
-
-
-def quick_start_ffmpeg(stream_url, output_dir):
-    """快速启动FFmpeg的后台任务"""
     try:
-        hls_file_path = os.path.join(output_dir, 'playlist.m3u8')
+        # 检查当前会话是否有效
+        if wsclient is not None and not wsclient.is_session_expired():
+            # 检查session_id是否匹配
+            if getattr(wsclient, 'session_id', None) == session_id:
+                # 会话有效且匹配，直接返回成功
+                return jsonify({
+                    'success': True,
+                    'message': '使用预加载会话成功',
+                    'stream_url': wsclient.streamUrl,
+                    'websocket_url': wsclient.websocketUrl if hasattr(wsclient, 'websocketUrl') else None
+                })
+            else:
+                # session_id不匹配，需要清理当前会话
+                try:
+                    wsclient.stop()
+                except:
+                    pass
+                wsclient = None
         
-        # 检测环境并选择配置
-        import platform
-        is_server = platform.system() == 'Linux' or 'server' in platform.node().lower()
+        # 如果没有有效会话，返回错误
+        return jsonify({
+            'success': False,
+            'message': '预加载会话无效或已过期',
+            'error': 'invalid_session'
+        }), 400
         
-        if is_server:
-            process = rtmp_to_hls_stable_fast(stream_url, hls_file_path)
-        else:
-            process = rtmp_to_hls_fast(stream_url, hls_file_path)
-        
-        if process:
-            print("快速FFmpeg启动成功")
-        else:
-            print("快速FFmpeg启动失败")
-            
     except Exception as e:
-        print(f"快速启动FFmpeg时出错: {e}")
+        print(f"使用预加载会话时出错: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'使用预加载会话失败: {str(e)}'
+        }), 500
 
-
-def async_avatar_initialization():
-    """异步Avatar初始化"""
+@interview_bp.route('/reinit_avatar', methods=['POST'])
+def reinit_avatar():
+    """
+    重新初始化数字人（不包括对话内容）
+    仅重新建立WebSocket连接和视频流
+    """
     global wsclient
+    
     try:
-        # 清理旧连接
+        # 1. 清理旧连接
         if wsclient is not None:
             try:
                 wsclient.stop()
@@ -1627,7 +1324,12 @@ def async_avatar_initialization():
                 pass
             wsclient = None
         
-        # 建立Avatar连接
+        # 2. 清理旧的HLS文件
+        project_root = os.path.dirname(current_app.root_path)
+        stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
+        delete_files_in_folder(stream_folder_abs)
+        
+        # 3. 建立新连接
         url = current_app.config['AVATER_CONFIG']['url']
         appId = current_app.config['AVATER_CONFIG']['appId']
         appKey = current_app.config['AVATER_CONFIG']['appKey']
@@ -1643,596 +1345,85 @@ def async_avatar_initialization():
         wsclient.vcn = vcn
         wsclient.start()
         
-        # 等待连接
-        max_wait = 20
+        # 4. 等待连接建立
+        max_wait = 15
         start_time = time.time()
         while not wsclient.streamUrl and time.time() - start_time < max_wait:
             time.sleep(0.5)
         
-        if wsclient.streamUrl:
-            print(f"异步Avatar初始化成功: {wsclient.streamUrl}")
-            # 立即启动FFmpeg
-            project_root = os.path.dirname(current_app.root_path)
-            stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
-            quick_start_ffmpeg(wsclient.streamUrl, stream_folder_abs)
-        else:
-            print("异步Avatar初始化失败")
-            
-    except Exception as e:
-        print(f"异步Avatar初始化出错: {e}")
-
-
-@interview_bp.route('/check_init_progress', methods=['GET'])
-def check_init_progress():
-    """检查初始化进度"""
-    global wsclient
-    
-    progress = {
-        'avatar_connected': False,
-        'stream_url_ready': False,
-        'hls_ready': False,
-        'overall_progress': 0,
-        'estimated_remaining': 0,
-        'message': '初始化中...'
-    }
-    
-    try:
-        # 检查Avatar连接状态
-        if wsclient is not None:
-            progress['avatar_connected'] = True
-            progress['overall_progress'] = 30
-            
-            if wsclient.streamUrl:
-                progress['stream_url_ready'] = True
-                progress['overall_progress'] = 60
-                progress['message'] = '正在启动流媒体...'
-                
-                # 检查HLS状态
-                project_root = os.path.dirname(current_app.root_path)
-                hls_file_path = os.path.join(project_root, 'resource', 'stream', 'playlist.m3u8')
-                
-                if os.path.exists(hls_file_path):
-                    progress['overall_progress'] = 80
-                    
-                    # 检查是否有切片
-                    try:
-                        with open(hls_file_path, 'r') as f:
-                            content = f.read()
-                            if '.ts' in content:
-                                progress['hls_ready'] = True
-                                progress['overall_progress'] = 100
-                                progress['message'] = '初始化完成'
-                                progress['estimated_remaining'] = 0
-                    except:
-                        pass
+        if not wsclient.streamUrl:
+            raise Exception("Avatar连接超时")
         
-        # 估算剩余时间
-        if progress['overall_progress'] < 100:
-            if progress['overall_progress'] < 30:
-                progress['estimated_remaining'] = 15
-                progress['message'] = '正在连接数字人服务...'
-            elif progress['overall_progress'] < 60:
-                progress['estimated_remaining'] = 10
-                progress['message'] = '正在获取流媒体地址...'
-            elif progress['overall_progress'] < 80:
-                progress['estimated_remaining'] = 8
-                progress['message'] = '正在启动流媒体转换...'
-            else:
-                progress['estimated_remaining'] = 5
-                progress['message'] = '正在生成视频切片...'
-    
-    except Exception as e:
-        progress['message'] = f'检查进度时出错: {str(e)}'
-    
-    return jsonify(progress)
-
-
-@interview_bp.route('/performance_summary', methods=['GET'])
-def get_performance_summary():
-    """
-    获取性能优化摘要
-    """
-    return jsonify({
-        'optimization_results': {
-            'original_config': {
-                'avatar_connection': '5-15秒',
-                'ffmpeg_init': '10-30秒',
-                'hls_generation': '4-8秒',
-                'total_time': '19-53秒',
-                'hls_segment_size': '2秒',
-                'buffer_segments': 6
-            },
-            'optimized_config': {
-                'avatar_connection': '5-12秒',
-                'ffmpeg_init': '3-8秒',
-                'hls_generation': '2-4秒',
-                'total_time': '10-24秒',
-                'hls_segment_size': '1.5秒',
-                'buffer_segments': 4
-            },
-            'improvement': {
-                'time_reduction': '47-55%',
-                'latency_reduction': '25-40%',
-                'stability': '显著提升'
-            }
-        },
-        'key_optimizations': [
-            '降低分析时间从2秒到1秒',
-            '减少探测大小50%',
-            '使用ultrafast编码预设',
-            '优化缓冲区大小',
-            '1.5秒切片平衡延迟和稳定性',
-            '减少GOP大小加快启动',
-            '添加重连机制防止断流'
-        ],
-        'api_endpoints': {
-            'quick_init': {
-                'url': '/interview/init_shuziren_quick',
-                'description': '快速初始化，立即返回进度',
-                'estimated_time': '10-24秒'
-            },
-            'standard_init': {
-                'url': '/interview/init_shuziren',
-                'description': '标准初始化，等待完成',
-                'estimated_time': '10-24秒'
-            },
-            'preload_mode': {
-                'urls': ['/interview/preload_avatar', '/interview/fast_start_hls'],
-                'description': '预加载模式，分步初始化',
-                'estimated_time': '5-15秒 + 5-9秒'
-            }
-        },
-        'monitoring': {
-            'health_check': '/interview/check_stream_health',
-            'progress_check': '/interview/check_init_progress',
-            'hls_status': '/interview/check_hls_status',
-            'auto_recovery': '/interview/enable_auto_recovery'
-        },
-        'environment_detection': {
-            'server_mode': '自动检测Linux服务器环境，使用稳定配置',
-            'local_mode': '本地环境使用快速配置',
-            'adaptive': '根据环境自动选择最佳参数'
-        }
-    })
-
-
-def rtmp_to_hls_rock_solid(input_rtmp_url, output_hls_path):
-    """
-    超稳定版本 - 专门解决闪烁和黑屏问题
-    """
-    ffmpeg_cmd = [
-        'ffmpeg',
-        '-y',                              # 覆盖现有文件
-        '-loglevel', 'info',               # 详细日志便于调试
-        '-reconnect', '1',                 # 启用重连
-        '-reconnect_at_eof', '1',          # EOF时重连
-        '-reconnect_streamed', '1',        # 流式重连
-        '-reconnect_delay_max', '3',       # 增加重连延迟到3秒
-        '-timeout', '10000000',            # 10秒超时
-        '-rw_timeout', '10000000',         # 读写超时
-        '-fflags', '+genpts+igndts',       # 生成时间戳+忽略DTS
-        '-thread_queue_size', '2048',      # 增大线程队列
-        '-analyzeduration', '3000000',     # 3秒分析时间确保稳定
-        '-probesize', '3000000',           # 3MB探测大小
-        '-i', input_rtmp_url,              # 输入源
-        '-c:v', 'libx264',                 # 视频编码
-        '-preset', 'medium',               # 平衡质量和速度
-        '-tune', 'zerolatency',            # 零延迟调优
-        '-profile:v', 'main',              # 主配置文件
-        '-level', '3.1',                   # H.264级别
-        '-x264-params', 'nal-hrd=cbr:force-cfr=1:bframes=0:ref=1', # 稳定参数
-        '-r', '25',                        # 固定帧率
-        '-pix_fmt', 'yuv420p',             # 像素格式
-        '-b:v', '1000k',                   # 稳定比特率
-        '-minrate', '800k',                # 最小比特率
-        '-maxrate', '1200k',               # 最大比特率
-        '-bufsize', '2000k',               # 缓冲区大小
-        '-g', '50',                        # GOP大小
-        '-keyint_min', '25',               # 最小关键帧间隔
-        '-sc_threshold', '0',              # 禁用场景检测
-        '-c:a', 'aac',                     # 音频编码
-        '-ac', '2',                        # 立体声
-        '-ar', '44100',                    # 音频采样率
-        '-b:a', '128k',                    # 音频比特率
-        '-f', 'hls',                       # HLS格式
-        '-hls_time', '3',                  # 3秒切片确保稳定
-        '-hls_list_size', '10',            # 保留10个片段
-        '-hls_flags', 'delete_segments+append_list+independent_segments',
-        '-hls_segment_type', 'mpegts',     # TS格式
-        '-hls_allow_cache', '1',           # 允许缓存
-        '-hls_segment_filename', os.path.join(os.path.dirname(output_hls_path), 'stable_%03d.ts'),
-        '-start_number', '0',              # 从0开始
-        '-avoid_negative_ts', 'make_zero', # 避免负时间戳
-        '-force_key_frames', 'expr:gte(t,n_forced*3)', # 每3秒强制关键帧
-        '-vsync', 'cfr',                   # 恒定帧率
-        '-async', '1',                     # 音频同步
-        '-map', '0:v:0',                   # 映射第一个视频流
-        '-map', '0:a:0',                   # 映射第一个音频流
-        '-shortest',                       # 最短流结束时停止
-        output_hls_path                    # 输出路径
-    ]
-    
-    try:
-        # 确保输出目录存在
-        output_dir = os.path.dirname(output_hls_path)
-        os.makedirs(output_dir, exist_ok=True)
+        # 5. 启动FFmpeg
+        hls_file_path_abs = os.path.join(stream_folder_abs, 'playlist.m3u8')
+        ffmpeg_process = rtmp_to_hls_fast_optimized(wsclient.streamUrl, hls_file_path_abs)
         
-        # 清理旧的切片文件
-        import glob
-        old_files = glob.glob(os.path.join(output_dir, '*.ts'))
-        for old_file in old_files:
-            try:
-                os.remove(old_file)
-            except:
-                pass
+        if ffmpeg_process is None:
+            raise Exception("FFmpeg启动失败")
         
-        # 确保日志目录存在
-        log_dir = os.path.join('log', 'ffmpeg_log')
-        os.makedirs(log_dir, exist_ok=True)
-
-        # 创建日志文件
-        timestamp = int(time.time())
-        log_file_name = f"ffmpeg_rock_solid_{timestamp}.log"
-        log_file_path = os.path.join(log_dir, log_file_name)
-
-        print(f"启动超稳定版FFmpeg进程，日志: {log_file_path}")
-
-        # 启动FFmpeg进程
-        with open(log_file_path, 'w', encoding='utf-8') as log_file:
-            process = subprocess.Popen(
-                ffmpeg_cmd,
-                stdout=subprocess.PIPE,
-                stderr=log_file,
-                bufsize=1,
-                universal_newlines=True
-            )
-
-        return process
+        # 6. 等待HLS文件生成
+        hls_ready = False
+        wait_start = time.time()
+        while time.time() - wait_start < 10:  # 最多等待10秒
+            if os.path.exists(hls_file_path_abs):
+                with open(hls_file_path_abs, 'r') as f:
+                    if '.ts' in f.read():
+                        hls_ready = True
+                        break
+            time.sleep(0.5)
         
-    except Exception as e:
-        print(f"启动超稳定版FFmpeg进程时发生错误: {e}")
-        return None
-
-
-def rtmp_to_hls_network_enhanced(input_rtmp_url, output_hls_path):
-    """
-    网络增强版本 - 专门解决 "Cannot assign requested address" 错误
-    修复 listen_timeout 参数问题
-    """
-    # 清理RTMP URL，移除可能存在的问题参数
-    cleaned_url = input_rtmp_url
-    if '?' in cleaned_url:
-        base_url = cleaned_url.split('?')[0]
-        print(f"检测到URL中包含参数，已清理: {input_rtmp_url} -> {base_url}")
-        cleaned_url = base_url
-    
-    ffmpeg_cmd = [
-        'ffmpeg',
-        '-y',                              # 覆盖现有文件
-        '-loglevel', 'warning',            # 减少日志输出
-        
-        # 仅添加必要的网络修复参数
-        '-timeout', '15000000',            # 15秒连接超时（比30秒短）
-        '-rw_timeout', '15000000',         # 15秒读写超时
-        '-reconnect', '1',                 # 启用重连
-        '-reconnect_at_eof', '1',          # EOF时重连
-        '-reconnect_streamed', '1',        # 流式重连
-        '-reconnect_delay_max', '3',       # 重连延迟3秒
-        
-        # 保持快速版的核心参数
-        '-fflags', '+genpts+nobuffer',     # 生成时间戳+无缓冲（快速版配置）
-        '-flags', 'low_delay',             # 低延迟
-        '-thread_queue_size', '512',       # 线程队列大小（快速版配置）
-        '-analyzeduration', '1000000',     # 1秒分析时间（快速版配置）
-        '-probesize', '1000000',           # 1MB探测大小（快速版配置）
-        
-        '-i', cleaned_url,                 # 输入源（使用清理后的URL）
-        
-        '-c:v', 'libx264',                 # 视频编码
-        '-preset', 'ultrafast',            # 最快编码预设
-        '-tune', 'zerolatency',            # 零延迟调优
-        '-profile:v', 'baseline',          # 基线配置（快速版配置）
-        '-level', '3.0',                   # H.264级别（快速版配置）
-        '-x264-params', 'nal-hrd=cbr',     # 恒定比特率（快速版配置）
-        
-        # 音频编码优化
-        '-c:a', 'aac',                     # 音频编码
-        '-ac', '2',                        # 立体声
-        '-ar', '44100',                    # 音频采样率
-        '-b:a', '128k',                    # 音频比特率
-        
-        # HLS输出优化
-        '-f', 'hls',                       # HLS格式
-        '-hls_time', '2',                  # 2秒切片（快速版配置）
-        '-hls_list_size', '6',             # 只保留6个片段（快速版配置）
-        '-hls_flags', 'delete_segments+append_list+split_by_time+program_date_time', # 快速版配置
-        '-hls_segment_type', 'mpegts',     # TS格式
-        '-hls_allow_cache', '0',           # 禁用缓存
-        '-start_number', '0',              # 从0开始
-        '-g', '30',                        # GOP大小
-        '-keyint_min', '30',               # 关键帧间隔
-        '-sc_threshold', '0',              # 禁用场景检测
-        output_hls_path                    # 输出路径
-    ]
-    
-    try:
-        # 确保输出目录存在
-        output_dir = os.path.dirname(output_hls_path)
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # 清理旧的切片文件
-        import glob
-        old_files = glob.glob(os.path.join(output_dir, 'enhanced_*.ts'))
-        for old_file in old_files:
-            try:
-                os.remove(old_file)
-            except:
-                pass
-        
-        # 确保日志目录存在
-        log_dir = os.path.join('log', 'ffmpeg_log')
-        os.makedirs(log_dir, exist_ok=True)
-
-        # 创建日志文件
-        timestamp = int(time.time())
-        log_file_name = f"ffmpeg_network_enhanced_{timestamp}.log"
-        log_file_path = os.path.join(log_dir, log_file_name)
-
-        print(f"启动网络增强版FFmpeg进程，日志: {log_file_path}")
-        print(f"重要参数: -multiple_requests 1 -tcp_nodelay 1 -timeout 30000000")
-
-        # 启动FFmpeg进程
-        with open(log_file_path, 'w', encoding='utf-8') as log_file:
-            process = subprocess.Popen(
-                ffmpeg_cmd,
-                stdout=subprocess.PIPE,
-                stderr=log_file,
-                bufsize=1,
-                universal_newlines=True
-            )
-
-        return process
-        
-    except Exception as e:
-        print(f"启动网络增强版FFmpeg进程时发生错误: {e}")
-        return None
-
-
-@interview_bp.route('/diagnose_flickering', methods=['GET'])
-def diagnose_flickering():
-    """
-    诊断数字人闪烁问题
-    """
-    global wsclient
-    
-    diagnosis = {
-        'avatar_status': 'unknown',
-        'rtmp_connection': 'unknown',
-        'hls_generation': 'unknown',
-        'segment_continuity': 'unknown',
-        'issues_found': [],
-        'recommended_actions': []
-    }
-    
-    try:
-        # 检查Avatar连接
-        if wsclient is None:
-            diagnosis['avatar_status'] = 'disconnected'
-            diagnosis['issues_found'].append('Avatar客户端未连接')
-            diagnosis['recommended_actions'].append('重新初始化Avatar连接')
-        elif not wsclient.avatarLinked:
-            diagnosis['avatar_status'] = 'connecting'
-            diagnosis['issues_found'].append('Avatar正在连接中')
-        elif not wsclient.streamUrl:
-            diagnosis['avatar_status'] = 'no_stream'
-            diagnosis['issues_found'].append('Avatar已连接但无流媒体URL')
-        else:
-            diagnosis['avatar_status'] = 'connected'
-            diagnosis['rtmp_connection'] = 'active'
-        
-        # 检查HLS文件状态
-        project_root = os.path.dirname(current_app.root_path)
-        hls_file_path = os.path.join(project_root, 'resource', 'stream', 'playlist.m3u8')
-        stream_dir = os.path.dirname(hls_file_path)
-        
-        if os.path.exists(hls_file_path):
-            diagnosis['hls_generation'] = 'active'
-            
-            # 详细检查HLS内容
-            try:
-                with open(hls_file_path, 'r') as f:
-                    content = f.read()
-                    lines = content.strip().split('\n')
-                    
-                    # 检查播放列表格式
-                    if not content.startswith('#EXTM3U'):
-                        diagnosis['issues_found'].append('HLS播放列表格式错误')
-                    
-                    # 检查切片文件
-                    ts_files = [line.strip() for line in lines if line.strip().endswith('.ts')]
-                    if len(ts_files) == 0:
-                        diagnosis['issues_found'].append('播放列表中没有切片文件')
-                    elif len(ts_files) < 3:
-                        diagnosis['issues_found'].append(f'切片文件过少({len(ts_files)}个)，可能导致闪烁')
-                        diagnosis['recommended_actions'].append('等待更多切片生成或重启流媒体')
-                    
-                    # 检查切片文件实际存在性和大小
-                    valid_segments = 0
-                    segment_sizes = []
-                    for ts_file in ts_files:
-                        ts_path = os.path.join(stream_dir, ts_file)
-                        if os.path.exists(ts_path):
-                            size = os.path.getsize(ts_path)
-                            if size > 1024:  # 至少1KB
-                                valid_segments += 1
-                                segment_sizes.append(size)
-                            else:
-                                diagnosis['issues_found'].append(f'切片文件{ts_file}过小({size}字节)')
-                        else:
-                            diagnosis['issues_found'].append(f'切片文件{ts_file}不存在')
-                    
-                    if valid_segments == len(ts_files):
-                        diagnosis['segment_continuity'] = 'good'
-                    elif valid_segments > 0:
-                        diagnosis['segment_continuity'] = 'partial'
-                        diagnosis['issues_found'].append(f'{len(ts_files) - valid_segments}个切片文件有问题')
-                    else:
-                        diagnosis['segment_continuity'] = 'failed'
-                        diagnosis['issues_found'].append('所有切片文件都有问题')
-                    
-                    # 检查切片时间戳
-                    if ts_files:
-                        timestamps = []
-                        for ts_file in ts_files:
-                            ts_path = os.path.join(stream_dir, ts_file)
-                            if os.path.exists(ts_path):
-                                timestamps.append(os.path.getmtime(ts_path))
-                        
-                        if len(timestamps) >= 2:
-                            # 检查时间间隔
-                            timestamps.sort()
-                            intervals = [timestamps[i+1] - timestamps[i] for i in range(len(timestamps)-1)]
-                            avg_interval = sum(intervals) / len(intervals)
-                            
-                            if avg_interval > 5:  # 间隔超过5秒
-                                diagnosis['issues_found'].append(f'切片生成间隔过长({avg_interval:.1f}秒)')
-                                diagnosis['recommended_actions'].append('FFmpeg可能有性能问题，考虑重启')
-            
-            except Exception as e:
-                diagnosis['issues_found'].append(f'读取HLS文件时出错: {str(e)}')
-        else:
-            diagnosis['hls_generation'] = 'failed'
-            diagnosis['issues_found'].append('HLS播放列表文件不存在')
-            diagnosis['recommended_actions'].append('重启流媒体生成')
-        
-        # 检查FFmpeg进程
-        try:
-            import psutil
-            ffmpeg_processes = []
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cpu_percent', 'memory_percent']):
-                if proc.info['name'] and 'ffmpeg' in proc.info['name'].lower():
-                    ffmpeg_processes.append({
-                        'pid': proc.info['pid'],
-                        'cpu': proc.info['cpu_percent'],
-                        'memory': proc.info['memory_percent']
-                    })
-            
-            if len(ffmpeg_processes) == 0:
-                diagnosis['issues_found'].append('FFmpeg进程未运行')
-                diagnosis['recommended_actions'].append('重启数字人服务')
-            elif len(ffmpeg_processes) > 1:
-                diagnosis['issues_found'].append(f'检测到{len(ffmpeg_processes)}个FFmpeg进程')
-                diagnosis['recommended_actions'].append('清理多余进程')
-            
-        except ImportError:
-            diagnosis['recommended_actions'].append('安装psutil进行进程监控')
-        
-        # 生成总体状态
-        if len(diagnosis['issues_found']) == 0:
-            diagnosis['overall_status'] = 'healthy'
-            diagnosis['recommended_actions'].append('系统运行正常')
-        elif len(diagnosis['issues_found']) <= 2:
-            diagnosis['overall_status'] = 'warning'
-        else:
-            diagnosis['overall_status'] = 'critical'
-            diagnosis['recommended_actions'].append('立即使用自动修复功能')
-    
-    except Exception as e:
-        diagnosis['overall_status'] = 'error'
-        diagnosis['issues_found'].append(f'诊断过程出错: {str(e)}')
-    
-    return jsonify(diagnosis)
-
-
-@interview_bp.route('/fix_flickering', methods=['POST'])
-def fix_flickering():
-    """
-    自动修复闪烁问题
-    """
-    global wsclient
-    
-    fix_steps = []
-    success = True
-    
-    try:
-        # 步骤1: 检查基础连接
-        fix_steps.append("检查Avatar连接状态...")
-        if wsclient is None or not wsclient.streamUrl:
-            fix_steps.append("❌ Avatar未连接，重新初始化...")
-            # 这里可以触发重新初始化
-            success = False
-            return jsonify({
-                'success': success,
-                'steps': fix_steps,
-                'message': '需要重新初始化Avatar连接'
+        return jsonify({
+                'success': True,
+                'message': '数字人重新初始化成功',
+                'stream_url': wsclient.streamUrl,
+                'websocket_url': getattr(wsclient, 'websocketUrl', None),
+                'hls_ready': hls_ready
             })
         
-        fix_steps.append("✅ Avatar连接正常")
+    except Exception as e:
+        print(f"重新初始化数字人失败: {e}")
+        # 确保清理资源
+        if wsclient is not None:
+            try:
+                wsclient.stop()
+            except:
+                pass
+            wsclient = None
         
-        # 步骤2: 停止所有FFmpeg进程
-        fix_steps.append("停止现有FFmpeg进程...")
-        try:
-            import psutil
-            for proc in psutil.process_iter(['pid', 'name']):
-                if proc.info['name'] and 'ffmpeg' in proc.info['name'].lower():
-                    proc.terminate()
-                    fix_steps.append(f"终止进程 PID: {proc.info['pid']}")
-            time.sleep(2)  # 等待进程终止
-        except:
-            pass
+        return jsonify({
+            'success': False,
+            'message': f'重新初始化数字人失败: {str(e)}'
+        }), 500
+
+@interview_bp.route('/cleanup_avatar', methods=['POST'])
+def cleanup_avatar():
+    """
+    清理数字人资源（断开WebSocket连接）
+    """
+    global wsclient
+    
+    try:
+        if wsclient is not None:
+            try:
+                wsclient.stop()
+            except Exception as e:
+                print(f"停止WebSocket连接时出错: {e}")
+            wsclient = None
         
-        # 步骤3: 清理所有HLS文件
-        fix_steps.append("清理HLS缓存文件...")
+        # 清理HLS文件
         project_root = os.path.dirname(current_app.root_path)
         stream_folder_abs = os.path.join(project_root, 'resource', 'stream')
         delete_files_in_folder(stream_folder_abs)
-        fix_steps.append("✅ 清理完成")
-        
-        # 步骤4: 等待一下确保清理完成
-        time.sleep(1)
-        
-        # 步骤5: 启动超稳定版FFmpeg
-        fix_steps.append("启动超稳定版FFmpeg...")
-        hls_file_path_abs = os.path.join(stream_folder_abs, 'playlist.m3u8')
-        ffmpeg_process = rtmp_to_hls_rock_solid(wsclient.streamUrl, hls_file_path_abs)
-        
-        if ffmpeg_process is None:
-            fix_steps.append("❌ FFmpeg启动失败")
-            success = False
-        else:
-            fix_steps.append("✅ FFmpeg启动成功")
-            
-            # 步骤6: 等待第一个切片生成
-            fix_steps.append("等待切片生成...")
-            max_wait = 15
-            start_time = time.time()
-            first_segment_ready = False
-            
-            while time.time() - start_time < max_wait:
-                if os.path.exists(hls_file_path_abs):
-                    try:
-                        with open(hls_file_path_abs, 'r') as f:
-                            content = f.read()
-                            if '.ts' in content:
-                                first_segment_ready = True
-                                break
-                    except:
-                        pass
-                time.sleep(0.5)
-            
-            if first_segment_ready:
-                fix_steps.append("✅ 首个切片已生成")
-                fix_steps.append("✅ 修复完成！请刷新播放器")
-            else:
-                fix_steps.append("⚠️ 切片生成较慢，请继续等待")
-                success = False
     
+        return jsonify({
+                'success': True,
+                'message': '数字人资源已清理'
+            })
+        
     except Exception as e:
-        fix_steps.append(f"❌ 修复过程出错: {str(e)}")
-        success = False
-    
+        print(f"清理数字人资源失败: {e}")
+        
     return jsonify({
-        'success': success,
-        'steps': fix_steps,
-        'message': '修复完成，请刷新页面' if success else '修复未完全成功，请手动重启'
-    })
+            'success': False,
+            'message': f'清理数字人资源失败: {str(e)}'
+        }), 500
