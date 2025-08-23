@@ -1897,22 +1897,28 @@ def rtmp_to_hls_rock_solid(input_rtmp_url, output_hls_path):
 def rtmp_to_hls_network_enhanced(input_rtmp_url, output_hls_path):
     """
     网络增强版本 - 专门解决 "Cannot assign requested address" 错误
+    修复 listen_timeout 参数问题
     """
+    # 清理RTMP URL，移除可能存在的问题参数
+    cleaned_url = input_rtmp_url
+    if '?' in cleaned_url:
+        base_url = cleaned_url.split('?')[0]
+        print(f"检测到URL中包含参数，已清理: {input_rtmp_url} -> {base_url}")
+        cleaned_url = base_url
+    
     ffmpeg_cmd = [
         'ffmpeg',
         '-y',                              # 覆盖现有文件
         '-loglevel', 'info',               # 详细日志便于调试
         
         # 网络连接增强参数 - 解决 "Cannot assign requested address"
-        '-multiple_requests', '1',         # 允许多次请求，重要！
+        '-timeout', '30000000',            # 30秒连接超时 (必须在-i之前)
+        '-rw_timeout', '30000000',         # 30秒读写超时 (必须在-i之前)
+        '-user_agent', 'FFmpeg/4.4.2',    # 设置用户代理
         '-reconnect', '1',                 # 启用重连
         '-reconnect_at_eof', '1',          # EOF时重连
         '-reconnect_streamed', '1',        # 流式重连
         '-reconnect_delay_max', '5',       # 重连延迟5秒
-        '-timeout', '30000000',            # 30秒连接超时
-        '-rw_timeout', '30000000',         # 30秒读写超时
-        '-tcp_nodelay', '1',               # TCP无延迟，关键参数
-        '-user_agent', 'FFmpeg/4.4.2',    # 设置用户代理
         
         # 缓冲和处理优化
         '-fflags', '+genpts+igndts+flush_packets',  # 生成时间戳+忽略DTS+刷新包
@@ -1926,7 +1932,7 @@ def rtmp_to_hls_network_enhanced(input_rtmp_url, output_hls_path):
         '-rtmp_buffer', '2000',            # RTMP缓冲区2秒
         '-rtmp_flush_interval', '1',       # RTMP刷新间隔
         
-        '-i', input_rtmp_url,              # 输入源
+        '-i', cleaned_url,                 # 输入源（使用清理后的URL）
         
         # 视频编码优化
         '-c:v', 'libx264',                 # 视频编码
