@@ -290,7 +290,7 @@ def init_shuziren():
         wsclient.start()
         
         # 优化：减少等待时间，增加超时检查
-        max_wait_time = 30  # 最大等待30秒
+        max_wait_time = 45  # 最大等待30秒
         start_wait = time.time()
         while not wsclient.streamUrl:
             if time.time() - start_wait > max_wait_time:
@@ -313,8 +313,10 @@ def init_shuziren():
         if is_server:
             print("检测到服务器环境，使用稳定版FFmpeg配置")
             # ffmpeg_process = rtmp_to_hls_stable_fast(wsclient.streamUrl, hls_file_path_abs)
-            print("使用超稳定版FFmpeg配置解决闪烁问题")
-            ffmpeg_process = rtmp_to_hls_rock_solid(wsclient.streamUrl, hls_file_path_abs)
+            # print("使用超稳定版FFmpeg配置解决闪烁问题")
+            # ffmpeg_process = rtmp_to_hls_rock_solid(wsclient.streamUrl, hls_file_path_abs)
+            print("检测到服务器环境，使用网络增强版FFmpeg配置")
+            ffmpeg_process = rtmp_to_hls_network_enhanced(wsclient.streamUrl, hls_file_path_abs)
         else:
             print("使用快速版FFmpeg配置")
             ffmpeg_process = rtmp_to_hls_fast(wsclient.streamUrl, hls_file_path_abs)
@@ -1889,6 +1891,127 @@ def rtmp_to_hls_rock_solid(input_rtmp_url, output_hls_path):
         
     except Exception as e:
         print(f"启动超稳定版FFmpeg进程时发生错误: {e}")
+        return None
+
+
+def rtmp_to_hls_network_enhanced(input_rtmp_url, output_hls_path):
+    """
+    网络增强版本 - 专门解决 "Cannot assign requested address" 错误
+    """
+    ffmpeg_cmd = [
+        'ffmpeg',
+        '-y',                              # 覆盖现有文件
+        '-loglevel', 'info',               # 详细日志便于调试
+        
+        # 网络连接增强参数 - 解决 "Cannot assign requested address"
+        '-multiple_requests', '1',         # 允许多次请求，重要！
+        '-reconnect', '1',                 # 启用重连
+        '-reconnect_at_eof', '1',          # EOF时重连
+        '-reconnect_streamed', '1',        # 流式重连
+        '-reconnect_delay_max', '5',       # 重连延迟5秒
+        '-timeout', '30000000',            # 30秒连接超时
+        '-rw_timeout', '30000000',         # 30秒读写超时
+        '-tcp_nodelay', '1',               # TCP无延迟，关键参数
+        '-user_agent', 'FFmpeg/4.4.2',    # 设置用户代理
+        
+        # 缓冲和处理优化
+        '-fflags', '+genpts+igndts+flush_packets',  # 生成时间戳+忽略DTS+刷新包
+        '-thread_queue_size', '4096',      # 增大线程队列
+        '-analyzeduration', '5000000',     # 5秒分析时间
+        '-probesize', '5000000',           # 5MB探测大小
+        '-max_delay', '5000000',           # 最大延迟5秒
+        
+        # RTMP特定参数
+        '-rtmp_live', 'live',              # RTMP直播模式
+        '-rtmp_buffer', '2000',            # RTMP缓冲区2秒
+        '-rtmp_flush_interval', '1',       # RTMP刷新间隔
+        
+        '-i', input_rtmp_url,              # 输入源
+        
+        # 视频编码优化
+        '-c:v', 'libx264',                 # 视频编码
+        '-preset', 'medium',               # 平衡质量和速度
+        '-tune', 'zerolatency',            # 零延迟调优
+        '-profile:v', 'main',              # 主配置文件
+        '-level', '3.1',                   # H.264级别
+        '-x264-params', 'nal-hrd=cbr:force-cfr=1:bframes=0:ref=1:no-scenecut=1', # 稳定参数
+        '-r', '25',                        # 固定帧率
+        '-pix_fmt', 'yuv420p',             # 像素格式
+        '-b:v', '1000k',                   # 稳定比特率
+        '-minrate', '800k',                # 最小比特率
+        '-maxrate', '1200k',               # 最大比特率
+        '-bufsize', '2400k',               # 缓冲区大小
+        '-g', '50',                        # GOP大小
+        '-keyint_min', '25',               # 最小关键帧间隔
+        '-sc_threshold', '0',              # 禁用场景检测
+        
+        # 音频编码优化
+        '-c:a', 'aac',                     # 音频编码
+        '-ac', '2',                        # 立体声
+        '-ar', '44100',                    # 音频采样率
+        '-b:a', '128k',                    # 音频比特率
+        
+        # HLS输出优化
+        '-f', 'hls',                       # HLS格式
+        '-hls_time', '3',                  # 3秒切片
+        '-hls_list_size', '10',            # 保留10个片段
+        '-hls_flags', 'delete_segments+append_list+independent_segments+round_durations',
+        '-hls_segment_type', 'mpegts',     # TS格式
+        '-hls_allow_cache', '1',           # 允许缓存
+        '-hls_segment_filename', os.path.join(os.path.dirname(output_hls_path), 'enhanced_%03d.ts'),
+        '-start_number', '0',              # 从0开始
+        '-avoid_negative_ts', 'make_zero', # 避免负时间戳
+        '-force_key_frames', 'expr:gte(t,n_forced*3)', # 每3秒强制关键帧
+        '-vsync', 'cfr',                   # 恒定帧率
+        '-async', '1',                     # 音频同步
+        '-copyts',                         # 复制时间戳
+        '-start_at_zero',                  # 从零开始
+        '-map', '0:v:0',                   # 映射第一个视频流
+        '-map', '0:a:0',                   # 映射第一个音频流
+        '-shortest',                       # 最短流结束时停止
+        output_hls_path                    # 输出路径
+    ]
+    
+    try:
+        # 确保输出目录存在
+        output_dir = os.path.dirname(output_hls_path)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # 清理旧的切片文件
+        import glob
+        old_files = glob.glob(os.path.join(output_dir, 'enhanced_*.ts'))
+        for old_file in old_files:
+            try:
+                os.remove(old_file)
+            except:
+                pass
+        
+        # 确保日志目录存在
+        log_dir = os.path.join('log', 'ffmpeg_log')
+        os.makedirs(log_dir, exist_ok=True)
+
+        # 创建日志文件
+        timestamp = int(time.time())
+        log_file_name = f"ffmpeg_network_enhanced_{timestamp}.log"
+        log_file_path = os.path.join(log_dir, log_file_name)
+
+        print(f"启动网络增强版FFmpeg进程，日志: {log_file_path}")
+        print(f"重要参数: -multiple_requests 1 -tcp_nodelay 1 -timeout 30000000")
+
+        # 启动FFmpeg进程
+        with open(log_file_path, 'w', encoding='utf-8') as log_file:
+            process = subprocess.Popen(
+                ffmpeg_cmd,
+                stdout=subprocess.PIPE,
+                stderr=log_file,
+                bufsize=1,
+                universal_newlines=True
+            )
+
+        return process
+        
+    except Exception as e:
+        print(f"启动网络增强版FFmpeg进程时发生错误: {e}")
         return None
 
 
