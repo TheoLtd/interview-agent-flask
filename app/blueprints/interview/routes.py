@@ -1909,47 +1909,31 @@ def rtmp_to_hls_network_enhanced(input_rtmp_url, output_hls_path):
     ffmpeg_cmd = [
         'ffmpeg',
         '-y',                              # 覆盖现有文件
-        '-loglevel', 'info',               # 详细日志便于调试
+        '-loglevel', 'warning',            # 减少日志输出
         
-        # 网络连接增强参数 - 解决 "Cannot assign requested address"
-        '-timeout', '30000000',            # 30秒连接超时 (必须在-i之前)
-        '-rw_timeout', '30000000',         # 30秒读写超时 (必须在-i之前)
-        '-user_agent', 'FFmpeg/4.4.2',    # 设置用户代理
+        # 仅添加必要的网络修复参数
+        '-timeout', '15000000',            # 15秒连接超时（比30秒短）
+        '-rw_timeout', '15000000',         # 15秒读写超时
         '-reconnect', '1',                 # 启用重连
         '-reconnect_at_eof', '1',          # EOF时重连
         '-reconnect_streamed', '1',        # 流式重连
-        '-reconnect_delay_max', '5',       # 重连延迟5秒
+        '-reconnect_delay_max', '3',       # 重连延迟3秒
         
-        # 缓冲和处理优化
-        '-fflags', '+genpts+igndts+flush_packets',  # 生成时间戳+忽略DTS+刷新包
-        '-thread_queue_size', '4096',      # 增大线程队列
-        '-analyzeduration', '5000000',     # 5秒分析时间
-        '-probesize', '5000000',           # 5MB探测大小
-        '-max_delay', '5000000',           # 最大延迟5秒
-        
-        # RTMP特定参数
-        '-rtmp_live', 'live',              # RTMP直播模式
-        '-rtmp_buffer', '2000',            # RTMP缓冲区2秒
-        '-rtmp_flush_interval', '1',       # RTMP刷新间隔
+        # 保持快速版的核心参数
+        '-fflags', '+genpts+nobuffer',     # 生成时间戳+无缓冲（快速版配置）
+        '-flags', 'low_delay',             # 低延迟
+        '-thread_queue_size', '512',       # 线程队列大小（快速版配置）
+        '-analyzeduration', '1000000',     # 1秒分析时间（快速版配置）
+        '-probesize', '1000000',           # 1MB探测大小（快速版配置）
         
         '-i', cleaned_url,                 # 输入源（使用清理后的URL）
         
-        # 视频编码优化
         '-c:v', 'libx264',                 # 视频编码
-        '-preset', 'medium',               # 平衡质量和速度
+        '-preset', 'ultrafast',            # 最快编码预设
         '-tune', 'zerolatency',            # 零延迟调优
-        '-profile:v', 'main',              # 主配置文件
-        '-level', '3.1',                   # H.264级别
-        '-x264-params', 'nal-hrd=cbr:force-cfr=1:bframes=0:ref=1:no-scenecut=1', # 稳定参数
-        '-r', '25',                        # 固定帧率
-        '-pix_fmt', 'yuv420p',             # 像素格式
-        '-b:v', '1000k',                   # 稳定比特率
-        '-minrate', '800k',                # 最小比特率
-        '-maxrate', '1200k',               # 最大比特率
-        '-bufsize', '2400k',               # 缓冲区大小
-        '-g', '50',                        # GOP大小
-        '-keyint_min', '25',               # 最小关键帧间隔
-        '-sc_threshold', '0',              # 禁用场景检测
+        '-profile:v', 'baseline',          # 基线配置（快速版配置）
+        '-level', '3.0',                   # H.264级别（快速版配置）
+        '-x264-params', 'nal-hrd=cbr',     # 恒定比特率（快速版配置）
         
         # 音频编码优化
         '-c:a', 'aac',                     # 音频编码
@@ -1959,22 +1943,15 @@ def rtmp_to_hls_network_enhanced(input_rtmp_url, output_hls_path):
         
         # HLS输出优化
         '-f', 'hls',                       # HLS格式
-        '-hls_time', '3',                  # 3秒切片
-        '-hls_list_size', '10',            # 保留10个片段
-        '-hls_flags', 'delete_segments+append_list+independent_segments+round_durations',
+        '-hls_time', '2',                  # 2秒切片（快速版配置）
+        '-hls_list_size', '6',             # 只保留6个片段（快速版配置）
+        '-hls_flags', 'delete_segments+append_list+split_by_time+program_date_time', # 快速版配置
         '-hls_segment_type', 'mpegts',     # TS格式
-        '-hls_allow_cache', '1',           # 允许缓存
-        '-hls_segment_filename', os.path.join(os.path.dirname(output_hls_path), 'enhanced_%03d.ts'),
+        '-hls_allow_cache', '0',           # 禁用缓存
         '-start_number', '0',              # 从0开始
-        '-avoid_negative_ts', 'make_zero', # 避免负时间戳
-        '-force_key_frames', 'expr:gte(t,n_forced*3)', # 每3秒强制关键帧
-        '-vsync', 'cfr',                   # 恒定帧率
-        '-async', '1',                     # 音频同步
-        '-copyts',                         # 复制时间戳
-        '-start_at_zero',                  # 从零开始
-        '-map', '0:v:0',                   # 映射第一个视频流
-        '-map', '0:a:0',                   # 映射第一个音频流
-        '-shortest',                       # 最短流结束时停止
+        '-g', '30',                        # GOP大小
+        '-keyint_min', '30',               # 关键帧间隔
+        '-sc_threshold', '0',              # 禁用场景检测
         output_hls_path                    # 输出路径
     ]
     
