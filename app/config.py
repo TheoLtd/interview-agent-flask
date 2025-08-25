@@ -72,11 +72,11 @@ class Config:
     }
 
     SPARK_MBTI_API = {
-        "api_key": "0a87ff1a9bdeb34ce22139bce83bf698",
-        "api_secret": "ZDlkZDJiMjY0OWRjNzkzNTBlYmI5ZTY3",
+        "api_key": "8f840589b78520e4ad8c7114be8ecf0e",
+        "api_secret": "YjRmZjdhZjFmNWQ1NDFjNjZlZTJjNGM0",
         'host': 'xingchen-api.xf-yun.com',
         'path': '/workflow/v1/chat/completions',
-        "flow_id": "7348687728526802946"
+        "flow_id": "7365799523739303937"
     }
 
     FACIAL_DETECT_API = {

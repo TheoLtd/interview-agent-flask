@@ -257,7 +257,6 @@ def handle_resume():
                     'success': True,
                     'content': {
                         'analysis_text': response.content,
-                        'overall_score': 75,  # 默认分数
                         'summary': response.content[:200] + '...' if len(response.content) > 200 else response.content
                     },
                     'type': 'text_analysis',
