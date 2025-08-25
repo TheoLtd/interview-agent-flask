@@ -22,6 +22,11 @@ class AIPracticeAPI():
         self.session_id = str(uuid.uuid4())
         print("已创建刷题助手, 会话id{0}".format(self.session_id))
 
+    def reset_session(self):
+        """用于重置会话 ID"""
+        self.session_id = str(uuid.uuid4())
+        print(f"会话已重置，新会话ID: {self.session_id}")
+
     def get_answer(self, prompt, max_retries=3):
         api_key = current_app.config['SPARK_PRACTICE_API']['api_key']
         api_secret = current_app.config['SPARK_PRACTICE_API']['api_secret']

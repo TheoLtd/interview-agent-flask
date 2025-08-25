@@ -205,4 +205,6 @@ __marimo__/
 
 
 # feedback
-resource/feedback*.json
+resource/feedback/*.json
+resource/stream/*.ts
+resource/stream/*.m3u8

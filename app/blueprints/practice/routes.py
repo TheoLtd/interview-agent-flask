@@ -13,6 +13,27 @@ from services.SparkResumeRefination import AIResumeRefinationAPI
 import os
 from . import practice_bp
 
+def load_resume_analysis_prompt(resume_content):
+    """从文件加载简历分析提示词模板"""
+    try:
+        # 获取当前文件的目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # 构建services目录下的提示词文件路径
+        prompt_file = os.path.join(current_dir, '..', '..', '..', 'services', 'resume_analysis_prompt.txt')
+        
+        with open(prompt_file, 'r', encoding='utf-8') as f:
+            prompt_template = f.read()
+        
+        # debug code
+        print("prompt_template.format(resume_content=resume_content): \n", prompt_template.format(resume_content=resume_content))
+        
+        # 替换模板中的占位符
+        return prompt_template.format(resume_content=resume_content)
+    except Exception as e:
+        print(f"❌ 加载简历分析提示词失败: {e}")
+        # 如果加载失败，返回一个简单的默认提示词
+        return f"请分析以下简历内容并给出专业建议：\n\n{resume_content}"
+
 
 @practice_bp.route('/answer', methods=['GET'])
 def handle_answer():
@@ -119,6 +140,7 @@ def evaluate_stream():
                 以下是我的历史刷题记录：
                 <{}>
              '''.format(history_data)
+             
     def generate():
         stream = DeepseekAPI.getInstance().global_deepseek_client.chat.completions.create(
             model="deepseek-chat",
@@ -137,6 +159,11 @@ def evaluate_stream():
 @practice_bp.route('/resume', methods=['POST'])
 def handle_resume():
     """增强版简历优化接口"""
+    print("🔄 收到简历分析请求")
+    print(f"📝 请求方法: {request.method}")
+    print(f"🌐 请求来源: {request.remote_addr}")
+    print(f"📁 请求文件数量: {len(request.files)}")
+    
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No file part'}), 400
@@ -152,10 +179,14 @@ def handle_resume():
         # 解析文件内容
         content = ''
         if file.filename.lower().endswith('.pdf'):
+            # debug code
+            print("pdf file")
             pdf_reader = pypdf.PdfReader(BytesIO(file.read()))
             for page in pdf_reader.pages:
                 content += page.extract_text() + '\n'
         elif file.filename.lower().endswith('.docx'):
+            # debug code
+            print("docx file")
             doc = docx.Document(BytesIO(file.read()))
             content = '\n'.join([para.text for para in doc.paragraphs])
         
@@ -172,91 +203,8 @@ def handle_resume():
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
         
-        # 构建增强版提示词
-        enhanced_prompt = f"""
-你是一名资深的HR专家和职业规划师，拥有15年以上的招聘和简历评估经验。请对以下简历进行全面、专业的分析和优化建议。
-
-## 📋 **分析维度**
-
-### 1. 简历结构与格式 (Resume Structure & Format)
-- 版面设计的专业性和可读性
-- 信息层次和逻辑结构
-- 格式一致性和视觉效果
-
-### 2. 内容完整性 (Content Completeness)
-- 必要信息的完整程度
-- 关键经历的覆盖面
-- 技能和成就的展示
-
-### 3. 专业匹配度 (Professional Alignment)
-- 经历与目标岗位的匹配度
-- 技能栈的相关性和深度
-- 职业发展路径的清晰度
-
-### 4. 成果量化 (Achievement Quantification)
-- 工作成果的具体化程度
-- 数据指标的运用
-- 影响力的体现
-
-### 5. 语言表达 (Language & Expression)
-- 专业术语的准确性
-- 表达的简洁有力
-- 动词和描述的效果
-
-## 📊 **输出要求**
-
-请严格按照以下JSON格式输出分析结果：
-
-```json
-{{
-  "overall_score": 整体评分(0-100),
-  "dimension_scores": {{
-    "structure_format": 结构格式分数(0-100),
-    "content_completeness": 内容完整性分数(0-100),
-    "professional_alignment": 专业匹配度分数(0-100),
-    "achievement_quantification": 成果量化分数(0-100),
-    "language_expression": 语言表达分数(0-100)
-  }},
-  "strengths": [
-    {{
-      "category": "优势类别",
-      "title": "优势标题",
-      "description": "具体描述，30-80字",
-      "evidence": "支撑证据或具体表现"
-    }}
-  ],
-  "improvements": [
-    {{
-      "category": "改进类别",
-      "title": "改进点标题",
-      "description": "问题描述，30-80字", 
-      "suggestion": "具体改进建议，50-100字",
-      "priority": "high|medium|low",
-      "expected_impact": "预期改进效果"
-    }}
-  ],
-  "optimization_recommendations": [
-    {{
-      "section": "简历部分(如教育背景、工作经历等)",
-      "current_issue": "当前问题",
-      "recommended_action": "具体优化行动",
-      "example": "优化示例或模板"
-    }}
-  ],
-  "keyword_suggestions": [
-    "建议添加的关键词1",
-    "建议添加的关键词2"
-  ],
-  "summary": "综合评价和建议，100-200字"
-}}
-```
-
-## 💼 **简历内容**
-
-{content}
-
-请基于以上简历内容，进行深入、专业的分析，给出具体可操作的优化建议。
-"""
+        # 从文件加载简历分析提示词模板
+        enhanced_prompt = load_resume_analysis_prompt(content)
         
         print(f"📄 处理简历文件: {file.filename}")
         print(f"📝 简历内容长度: {len(content)} 字符")
@@ -278,6 +226,9 @@ def handle_resume():
         
         if response and response.content:
             try:
+                # debug code
+                print("开始尝试解析简历分析结果")
+                
                 # 尝试解析JSON响应
                 analysis_result = json.loads(response.content)
                 
@@ -300,6 +251,7 @@ def handle_resume():
                 })
                 
             except json.JSONDecodeError:
+                print("非json格式, 使用原始文本")
                 # 如果不是JSON格式，使用原始文本
                 return jsonify({
                     'success': True,

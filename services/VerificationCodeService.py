@@ -1,5 +1,6 @@
 import json
 import time
+import os
 from datetime import datetime, timedelta
 from app.extensions import get_redis, redis_manager
 
@@ -9,7 +10,9 @@ class VerificationCodeService:
     
     def __init__(self):
         self.redis_client = None
-        self.memory_storage = {}  # 内存后备存储
+        self.storage_file = os.path.join(os.path.dirname(__file__), '..', 'temp_verification_storage.json')
+        # 确保临时存储目录存在
+        os.makedirs(os.path.dirname(self.storage_file), exist_ok=True)
         
     def _get_redis_client(self):
         """获取Redis客户端"""
@@ -20,6 +23,45 @@ class VerificationCodeService:
     def _generate_key(self, phone_number, code_type="sms"):
         """生成Redis键"""
         return f"verification_code:{code_type}:{phone_number}"
+    
+    def _load_file_storage(self):
+        """从文件加载存储数据"""
+        try:
+            if os.path.exists(self.storage_file):
+                with open(self.storage_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            print(f"❌ 加载文件存储失败: {e}")
+            return {}
+    
+    def _save_file_storage(self, data):
+        """保存数据到文件"""
+        try:
+            with open(self.storage_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            print(f"❌ 保存文件存储失败: {e}")
+            return False
+    
+    def _cleanup_expired_file_data(self, data):
+        """清理文件中过期的数据"""
+        current_time = time.time()
+        expired_keys = []
+        
+        for key, code_data in data.items():
+            expire_time = code_data.get('expire_timestamp', 0)
+            if current_time > expire_time:
+                expired_keys.append(key)
+        
+        for key in expired_keys:
+            del data[key]
+        
+        if expired_keys:
+            print(f"🧹 从文件存储清理了{len(expired_keys)}个过期验证码")
+        
+        return data
     
     def store_code(self, phone_number, code, expire_minutes=5, code_type="sms"):
         """
@@ -58,11 +100,14 @@ class VerificationCodeService:
                 return True
             else:
                 # 使用内存存储作为后备
-                self.memory_storage[key] = {
+                # 将数据保存到文件
+                file_data = self._load_file_storage()
+                file_data[key] = {
                     **code_data,
                     'expire_timestamp': time.time() + (expire_minutes * 60)
                 }
-                print(f"⚠️ 验证码已存储到内存: {phone_number} -> {code}")
+                self._save_file_storage(file_data)
+                print(f"⚠️ 验证码已存储到文件: {phone_number} -> {code}")
                 return True
                 
         except Exception as e:
@@ -105,29 +150,33 @@ class VerificationCodeService:
                 print(f"🔍 解析后的验证码数据: {code_data}")
             else:
                 # debug code
-                print("🔍 从内存获取验证码...")
+                print("🔍 从文件获取验证码...")
+                # 从文件加载数据
+                file_data = self._load_file_storage()
                 # debug code
-                print(f"🔍 内存中的所有键: {list(self.memory_storage.keys())}")
-                if key not in self.memory_storage:
+                print(f"🔍 文件中的所有键: {list(file_data.keys())}")
+                if key not in file_data:
                     # debug code
-                    print(f"❌ 内存中未找到键: {key}")
+                    print(f"❌ 文件中未找到键: {key}")
                     return {
                         'success': False, 
                         'message': '验证码不存在或已过期',
                         'code': 'CODE_NOT_EXISTS'
                     }
                 
-                code_data = self.memory_storage[key]
+                code_data = file_data[key]
                 # debug code
-                print(f"🔍 内存中的验证码数据: {code_data}")
-                # 检查内存中的过期时间
+                print(f"🔍 文件中的验证码数据: {code_data}")
+                # 检查文件中的过期时间
                 current_time = time.time()
                 expire_time = code_data.get('expire_timestamp', 0)
                 # debug code
                 print(f"🔍 当前时间: {current_time}, 过期时间: {expire_time}")
                 if current_time > expire_time:
                     print("❌ 验证码已过期")
-                    del self.memory_storage[key]
+                    # 清理过期数据
+                    file_data = self._cleanup_expired_file_data(file_data)
+                    self._save_file_storage(file_data)
                     return {
                         'success': False, 
                         'message': '验证码已过期',
@@ -197,9 +246,11 @@ class VerificationCodeService:
                 if ttl > 0:
                     redis_client.setex(key, ttl, json.dumps(code_data))
             else:
-                # 更新内存存储
-                if key in self.memory_storage:
-                    self.memory_storage[key].update(code_data)
+                # 更新文件存储
+                file_data = self._load_file_storage()
+                if key in file_data:
+                    file_data[key].update(code_data)
+                    self._save_file_storage(file_data)
                     
         except Exception as e:
             print(f"❌ 更新尝试次数失败: {e}")
@@ -213,7 +264,10 @@ class VerificationCodeService:
             if redis_client and redis_manager.is_available():
                 redis_client.delete(key)
             else:
-                self.memory_storage.pop(key, None)
+                file_data = self._load_file_storage()
+                if key in file_data:
+                    del file_data[key]
+                    self._save_file_storage(file_data)
                 
         except Exception as e:
             print(f"❌ 删除验证码失败: {e}")
@@ -272,12 +326,16 @@ class VerificationCodeService:
             current_time = time.time()
             expired_keys = []
             
-            for key, data in self.memory_storage.items():
+            # 从文件加载数据
+            file_data = self._load_file_storage()
+            for key, data in file_data.items():
                 if current_time > data.get('expire_timestamp', 0):
                     expired_keys.append(key)
             
             for key in expired_keys:
-                del self.memory_storage[key]
+                del file_data[key]
+                
+            self._save_file_storage(file_data) # 保存清理后的数据
                 
             if expired_keys:
                 print(f"🧹 清理了{len(expired_keys)}个过期验证码")

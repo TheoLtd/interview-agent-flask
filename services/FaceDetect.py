@@ -130,7 +130,7 @@ def parse_expression_result(face_data):
     # 讯飞表情到项目表情的映射
     expression_mapping = {
         0: 5,  # 惊讶 -> 惊恐
-        1: 5,  # 害怕 -> 惊恐  
+        1: 5,  # 害怕 -> 惊恐
         2: 6,  # 厌恶 -> 厌恶
         3: 2,  # 高兴 -> 喜悦
         4: 4,  # 悲伤 -> 悲伤
@@ -138,8 +138,13 @@ def parse_expression_result(face_data):
         6: 7,  # 正常 -> 中性
     }
     
+    
+    # 增加用户非中性表情的权重, 使得在评分时更易捕获到非中性表情在面试过程中的表现
     if expression in expression_mapping:
-        expression_count[expression_mapping[expression]] = 1
+        if expression_mapping[expression] != 7:
+            expression_count[expression_mapping[expression]] = 10
+        else:
+            expression_count[expression_mapping[expression]] = 1
     else:
         expression_count[1] = 1  # 其他表情
     

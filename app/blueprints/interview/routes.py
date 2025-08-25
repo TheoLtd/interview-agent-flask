@@ -1427,3 +1427,254 @@ def cleanup_avatar():
             'success': False,
             'message': f'清理数字人资源失败: {str(e)}'
         }), 500
+
+
+@interview_bp.route('/recommend_learning_route', methods=['POST'])
+def recommend_learning_route():
+    """
+    根据最新面试反馈和用户信息生成个性化学习路线推荐
+    接收参数：
+    - major: 用户专业
+    - intention: 求职意向
+    - job_description: 岗位描述
+    """
+    try:
+        # 从POST请求中获取用户信息
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+        
+        major = data.get('major', '')
+        intention = data.get('intention', '')
+        job_description = data.get('job_description', '')
+        
+        # 验证必需参数
+        if not all([major, intention]):
+            return jsonify({
+                'error': 'Missing required parameters: major and intention are required',
+                'received': {
+                    'major': major,
+                    'intention': intention,
+                    'job_description': job_description
+                }
+            }), 400
+        
+        print(f"接收到用户信息: 专业={major}, 意向={intention}, 岗位描述={job_description[:50]}...")
+
+        # 查找最新的面试反馈文件
+        feedback_folder = current_app.config.get('FEEDBACK_FOLDER_ROUTE', 'feedback')
+        
+        # 确保反馈文件夹存在
+        if not os.path.exists(feedback_folder):
+            print(f"反馈文件夹不存在: {feedback_folder}")
+            return jsonify({
+                'error': 'Feedback folder not found',
+                'success': False,
+                'learning_route': _generate_fallback_learning_route(major, intention),
+                'user_info': {
+                    'major': major,
+                    'intention': intention,
+                    'job_description': job_description[:100] + "..." if len(job_description) > 100 else job_description
+                },
+                'message': 'Generated fallback learning route due to missing feedback data'
+            })
+        
+        print(f"查找反馈文件，文件夹: {feedback_folder}")
+        
+        feedback_data = None
+        
+        # 1. 优先查找增强版反馈文件
+        enhanced_files = glob.glob(os.path.join(feedback_folder, "enhanced_feedback_*.json"))
+        if enhanced_files:
+            latest_enhanced_file = max(enhanced_files, key=os.path.getctime)
+            print(f"找到增强版反馈文件: {latest_enhanced_file}")
+            with open(latest_enhanced_file, 'r', encoding='utf-8') as f:
+                feedback_data = json.load(f)
+        else:
+            # 2. 查找简单反馈文件
+            txt_files = glob.glob(os.path.join(feedback_folder, "*.txt"))
+            if txt_files:
+                latest_file = max(txt_files, key=os.path.getctime)
+                print(f"找到简单反馈文件: {latest_file}")
+                with open(latest_file, 'r', encoding='utf-8') as f:
+                    feedback_content = f.read()
+                    try:
+                        feedback_data = json.loads(feedback_content)
+                    except json.JSONDecodeError:
+                        feedback_data = {"text_feedback": feedback_content}
+            else:
+                print("未找到任何反馈文件")
+
+        if not feedback_data:
+            print("没有找到反馈数据，使用通用学习路线")
+            fallback_route = _generate_fallback_learning_route(major, intention)
+            return jsonify({
+                'success': True,
+                'learning_route': fallback_route,
+                'user_info': {
+                    'major': major,
+                    'intention': intention,
+                    'job_description': job_description[:100] + "..." if len(job_description) > 100 else job_description
+                },
+                'message': 'Generated general learning route (no feedback data found)',
+                'warning': 'Using fallback recommendations'
+            })
+
+        # 读取学习路线推荐的 prompt 模板
+        prompt_path = os.path.join(os.path.dirname(__file__), '../../../services', 'learning_route_prompt.txt')
+        try:
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                prompt_template = f.read()
+        except FileNotFoundError:
+            # 如果文件不存在，使用内置的 prompt
+            prompt_template = """
+根据面试反馈结果，为用户生成个性化的学习路线推荐。请返回一个JSON格式的学习资源映射，格式如下：
+{
+"学习内容描述": "学习资源链接",
+"学习内容描述": "学习资源链接"
+}
+
+用户信息：
+专业：{major}
+求职意向：{intention}
+岗位描述：{job_description}
+
+面试反馈数据：
+{feedback_summary}
+
+请根据用户的专业背景、求职意向和面试反馈中的薄弱环节(主要针对薄弱环节)，推荐最相关的学习资源。
+学习资源应该包括：
+1. 在线课程（优先推荐B站、慕课网、极客时间等中文平台）
+2. 技术书籍
+3. 实战项目
+4. 官方文档或教程
+
+请确保推荐的内容具体、实用，链接真实有效。返回的JSON格式要规范，每个学习内容描述要清晰明确。
+"""
+
+        # 准备反馈摘要
+        if isinstance(feedback_data, dict):
+            if 'interview_summary' in feedback_data:
+                feedback_summary = feedback_data['interview_summary']
+            elif 'disadvantages' in feedback_data:
+                # 提取主要薄弱环节
+                disadvantages = feedback_data.get('disadvantages', [])
+                feedback_summary = "主要薄弱环节：" + "；".join([item.get('title', '') + "：" + item.get('desc', '') for item in disadvantages[:3]])
+            else:
+                feedback_summary = json.dumps(feedback_data, ensure_ascii=False)[:500]  # 限制长度
+        else:
+            feedback_summary = str(feedback_data)[:500]
+
+        # 构建完整的 prompt
+        full_prompt = prompt_template.format(
+            major=major,
+            intention=intention,
+            job_description=job_description,
+            feedback_summary=feedback_summary
+        )
+
+        # 调用 DeepSeek API 生成学习路线
+        response = DeepseekAPI.getInstance().chat_return_json(full_prompt)
+        
+        if not response:
+            return jsonify({'error': 'Failed to generate learning route from DeepSeek API'}), 500
+
+        # 解析 DeepSeek 返回的内容
+        try:
+            # 如果返回的是字符串，尝试解析为 JSON
+            if hasattr(response, 'content'):
+                content = response.content
+            else:
+                content = str(response)
+            
+            # 尝试解析 JSON
+            if isinstance(content, str):
+                # 提取JSON部分（可能包含其他文本）
+                start_idx = content.find('{')
+                end_idx = content.rfind('}') + 1
+                if start_idx != -1 and end_idx != 0:
+                    json_content = content[start_idx:end_idx]
+                    learning_route = json.loads(json_content)
+                else:
+                    # 如果没有找到JSON格式，返回错误
+                    raise ValueError("No JSON format found in response")
+            else:
+                learning_route = content
+
+            # 记录日志
+            log_to_chat_file({
+                "event": "Learning Route Generated",
+                "user_major": major,
+                "user_intention": intention,
+                "learning_route_count": len(learning_route) if isinstance(learning_route, dict) else 0
+            })
+
+            return jsonify({
+                'success': True,
+                'learning_route': learning_route,
+                'user_info': {
+                    'major': major,
+                    'intention': intention,
+                    'job_description': job_description[:100] + "..." if len(job_description) > 100 else job_description
+                },
+                'message': 'Learning route generated successfully'
+            })
+
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Failed to parse learning route JSON: {e}")
+            print(f"Raw response: {content}")
+            
+            # 降级处理：返回通用学习建议
+            fallback_route = _generate_fallback_learning_route(major, intention)
+            return jsonify({
+                'success': True,
+                'learning_route': fallback_route,
+                'user_info': {
+                    'major': major,
+                    'intention': intention,
+                    'job_description': job_description[:100] + "..." if len(job_description) > 100 else job_description
+                },
+                'message': 'Generated fallback learning route due to parsing error',
+                'warning': 'Used fallback recommendations'
+            })
+
+    except Exception as e:
+        print(f"Learning route generation failed: {str(e)}")
+        return jsonify({
+            'error': f'Learning route generation failed: {str(e)}',
+            'success': False
+        }), 500
+
+
+def _generate_fallback_learning_route(major, intention):
+    """
+    生成降级学习路线（当 AI 生成失败时使用）
+    """
+    fallback_routes = {
+        "计算机": {
+            "数据结构与算法基础": "https://www.bilibili.com/video/BV1H4411N7oD/",
+            "计算机网络原理": "https://www.bilibili.com/video/BV19E411D78Q/",
+            "操作系统原理": "https://www.bilibili.com/video/BV1YE411D7nH/",
+            "数据库系统概念": "https://www.bilibili.com/video/BV1NJ411J79W/"
+        },
+        "软件工程": {
+            "Java编程基础": "https://www.bilibili.com/video/BV12J41137hu/",
+            "Spring框架学习": "https://www.bilibili.com/video/BV1WZ4y1P7Bp/",
+            "MySQL数据库实战": "https://www.bilibili.com/video/BV1Kr4y1i7ru/",
+            "前端开发入门": "https://www.bilibili.com/video/BV14J4114768/"
+        },
+        "默认": {
+            "编程基础入门": "https://www.bilibili.com/video/BV1YW411x7eN/",
+            "算法与数据结构": "https://www.bilibili.com/video/BV1H4411N7oD/",
+            "计算机基础知识": "https://www.bilibili.com/video/BV19E411D78Q/",
+            "项目实战练习": "https://github.com/topics/beginner-project"
+        }
+    }
+    
+    # 根据专业选择合适的学习路线
+    for key in fallback_routes:
+        if key in major:
+            return fallback_routes[key]
+    
+    # 如果没有匹配的专业，返回默认路线
+    return fallback_routes["默认"]
