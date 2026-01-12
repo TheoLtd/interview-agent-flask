@@ -69,7 +69,7 @@ class DeepseekAPI():
         if not deepseek_history:
             return {}
         history = deepseek_history.copy()
-        history.insert(0, {"role": "user", "content": "所有回答控制在100字以内"})
+        history.insert(0, {"role": "user", "content": "所有回答控制在100字以内, 每次只能给出最多一个问题, 问出6个问题后, 提示面试结束"})
         print(history)
 
         for attempt in range(1, max_retries + 1):

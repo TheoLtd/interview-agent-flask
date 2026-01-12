@@ -29,9 +29,22 @@ class avatarWebsocket(WebSocketClient, threading.Thread):
         self.linkConnected = False
         self.avatarLinked = False
         self.streamUrl = ''
+        
+        # 添加会话超时相关属性
+        self.session_start_time = None
+        self.session_timeout = 30 * 60  # 30分钟，单位：秒
+        self.timeout_warning_sent = False
+        self.timeout_timer = None
 
     def run(self):
         try:
+            # 记录会话开始时间
+            self.session_start_time = time.time()
+            print(f"Avatar会话开始: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.session_start_time))}")
+            
+            # 启动超时监控线程
+            self.start_timeout_monitor()
+            
             self.connect()
             self.connectAvatar()
             _thread.start_new_thread(self.send_Message, ())
@@ -40,9 +53,73 @@ class avatarWebsocket(WebSocketClient, threading.Thread):
         except Exception as e:
             self.status = False
             print(e)
+        finally:
+            # 清理超时监控
+            self.stop_timeout_monitor()
+
+    def start_timeout_monitor(self):
+        """启动超时监控线程"""
+        self.timeout_timer = threading.Timer(self.session_timeout, self._handle_session_timeout)
+        self.timeout_timer.daemon = True
+        self.timeout_timer.start()
+        
+        # 启动25分钟警告定时器
+        warning_timer = threading.Timer(25 * 60, self._send_timeout_warning)
+        warning_timer.daemon = True
+        warning_timer.start()
+
+    def stop_timeout_monitor(self):
+        """停止超时监控"""
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+
+    def _send_timeout_warning(self):
+        """发送超时警告"""
+        if self.status and not self.timeout_warning_sent:
+            self.timeout_warning_sent = True
+            warning_text = "提醒：您的面试会话还有5分钟即将结束，请抓紧时间完成面试。"
+            print(f"发送超时警告: {warning_text}")
+            self.sendDriverText(warning_text)
+
+    def _handle_session_timeout(self):
+        """处理会话超时"""
+        if self.status:
+            timeout_text = "面试时间已到30分钟，会话即将自动结束。感谢您的参与！"
+            print(f"会话超时，自动结束: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}")
+            
+            # 发送结束消息
+            try:
+                self.sendDriverText(timeout_text)
+                time.sleep(3)  # 给一点时间让消息发送完成
+            except Exception as e:
+                print(f"发送超时消息时出错: {e}")
+            
+            # 强制结束会话
+            self.stop()
+
+    def get_session_remaining_time(self):
+        """获取会话剩余时间（秒）"""
+        if not self.session_start_time:
+            return self.session_timeout
+        
+        elapsed_time = time.time() - self.session_start_time
+        remaining_time = max(0, self.session_timeout - elapsed_time)
+        return remaining_time
+
+    def get_session_elapsed_time(self):
+        """获取会话已用时间（秒）"""
+        if not self.session_start_time:
+            return 0
+        
+        return time.time() - self.session_start_time
+
+    def is_session_expired(self):
+        """检查会话是否已过期"""
+        return self.get_session_remaining_time() <= 0
 
     def stop(self):
         self.status = False
+        self.stop_timeout_monitor()  # 停止超时监控
         self.close(code=1000)
 
     def send_Message(self):
@@ -166,27 +243,44 @@ class avatarWebsocket(WebSocketClient, threading.Thread):
                     raise BreakException()
                 if 'avatar' in data['payload'] and data['payload']['avatar']['event_type'] == 'stream_info':
                     self.avatarLinked = True
-                    print('avatar ws connected: %s \n' % str(message))
-                    print('stream url: %s \n' % data['payload']['avatar']['stream_url'])
-                    streamUrl = data['payload']['avatar']['stream_url']
-                    self.streamUrl = streamUrl
-                    # def play_stream(url):
-                    #     cap = cv2.VideoCapture(url)
-                    #     if not cap.isOpened():
-                    #         print("Cannot open stream:", url)
-                    #         return
-                    #     while cap.isOpened():
-                    #         ret, frame = cap.read()
-                    #         if not ret:
-                    #             print("Stream ended or cannot fetch frame.")
-                    #             break
-                    #         cv2.imshow('RTMP Stream', frame)
-                    #         if cv2.waitKey(1) & 0xFF == ord('q'):
-                    #             break
-                    #     cap.release()
-                    #     cv2.destroyAllWindows()
+                    print('🎭 Avatar WebSocket 连接成功')
+                    print('📨 完整消息:', str(message))
+                    
+                    # 从服务器获取原始streamUrl
+                    original_streamUrl = data['payload']['avatar']['stream_url']
+                    print('🔗 服务器返回的原始URL:', original_streamUrl)
+                    
+                    # 保留原始URL中的鉴权参数
+                    if '?' in original_streamUrl:
+                        base_url, auth_params = original_streamUrl.split('?', 1)
+                        # 解析鉴权参数
+                        auth_dict = {}
+                        for param in auth_params.split('&'):
+                            if '=' in param:
+                                key, value = param.split('=', 1)
+                                auth_dict[key] = value
+                        
+                        # 只保留必要的鉴权参数
+                        needed_params = ['token', 'auth_key', 'auth_time']
+                        filtered_params = {k: v for k, v in auth_dict.items() if k in needed_params}
+                        
+                        # 重构URL
+                        if filtered_params:
+                            query_string = '&'.join([f"{k}={v}" for k, v in filtered_params.items()])
+                            self.streamUrl = f"{base_url}?{query_string}"
+                            print('⚠️ 保留鉴权参数:')
+                            print(f'   🔴 原始URL: {original_streamUrl}')
+                            print(f'   🟢 处理后URL: {self.streamUrl}')
+                        else:
+                            self.streamUrl = base_url
+                            print('⚠️ 未找到鉴权参数，使用基础URL')
+                    else:
+                        # URL没有参数，直接使用
+                        self.streamUrl = original_streamUrl
+                        print(f'✅ URL无参数，直接使用: {self.streamUrl}')
+                    
+                    print(f'🎯 最终设置的streamUrl: {self.streamUrl}')
 
-                    # threading.Thread(target=play_stream, args=(streamUrl,), daemon=True).start()
                 if 'avatar' in data['payload'] and data['payload']['avatar']['event_type'] == 'pong':
                     pass
         except BreakException:

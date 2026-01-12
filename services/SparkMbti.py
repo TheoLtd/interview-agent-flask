@@ -1,35 +1,17 @@
 import http.client
 import json
 from flask import current_app
-import uuid
-# API_KEY = "9f638064e25b1ae24d828e89c1b21026"
-# API_SECRET = "Y2VlMWVmZTJkNTJlMWJlYjc0YjJkOTA3"
-# "flow_id": "7341661804480536578"
-
-# print("a")
-# headers = {
-#     "Content-Type": "application/json",
-#     "Accept": "text/event-stream",
-#     "Authorization": f"Bearer {API_KEY}:{API_SECRET}",
-# }
 
 
-class AIPracticeAPI():
+class AIMbtiAPI():
     _instance = None
 
     def __init__(self):
-        self.name = "简历出题助手"
-        self.session_id = str(uuid.uuid4())
-        print("已创建刷题助手, 会话id{0}".format(self.session_id))
-
-    def reset_session(self):
-        """用于重置会话 ID"""
-        self.session_id = str(uuid.uuid4())
-        print(f"会话已重置，新会话ID: {self.session_id}")
+        self.name = "MBTI测试助手"
 
     def get_answer(self, prompt, max_retries=3):
-        api_key = current_app.config['SPARK_PRACTICE_API']['api_key']
-        api_secret = current_app.config['SPARK_PRACTICE_API']['api_secret']
+        api_key = current_app.config['SPARK_MBTI_API']['api_key']
+        api_secret = current_app.config['SPARK_MBTI_API']['api_secret']
 
         headers = {
             "Content-Type": "application/json",
@@ -38,15 +20,14 @@ class AIPracticeAPI():
 
         # 创建HTTPS连接
         agent_client = http.client.HTTPSConnection(
-            current_app.config['SPARK_PRACTICE_API']['host'],
+            current_app.config['SPARK_MBTI_API']['host'],
             timeout=120
         )
 
         # 准备请求数据
         data = {
-            "flow_id": current_app.config['SPARK_PRACTICE_API']['flow_id'],
+            "flow_id": current_app.config['SPARK_MBTI_API']['flow_id'],
             "uid": "123",
-            "session_id": self.session_id,
             "parameters": {"AGENT_USER_INPUT": prompt},
             "ext": {},
             "stream": False,
@@ -54,11 +35,10 @@ class AIPracticeAPI():
         payload = json.dumps(data)
 
         try:
-            print("Start Sending to Spark Practice API...")
             # 发送请求
             agent_client.request(
                 "POST",
-                current_app.config['SPARK_PRACTICE_API'].get('path', '/workflow/v1/chat/completions'),
+                current_app.config['SPARK_MBTI_API'].get('path', '/workflow/v1/chat/completions'),
                 payload,
                 headers
             )
@@ -66,7 +46,7 @@ class AIPracticeAPI():
 
             # 检查HTTP状态
             if res.status != 200:
-                error_msg = f"Spark Practice API错误: HTTP {res.status} {res.reason}"
+                error_msg = f"API错误: HTTP {res.status} {res.reason}"
                 current_app.logger.error(error_msg)
                 return error_msg
 
@@ -78,7 +58,7 @@ class AIPracticeAPI():
             if "code" in response_data and response_data["code"] != 0:
                 error_code = response_data["code"]
                 error_msg = response_data.get("message", "未知错误")
-                current_app.logger.error(f"Spark Practice API错误 ({error_code}): {error_msg}")
+                current_app.logger.error(f"API错误 ({error_code}): {error_msg}")
                 return f"API错误 ({error_code}): {error_msg}"
 
             # 解析响应内容
@@ -94,11 +74,11 @@ class AIPracticeAPI():
                 return response_data["content"]
 
             # 无法解析响应
-            current_app.logger.error(f"无法解析Spark Practice API响应: {response_data}")
-            return "错误: 无法解析Spark Practice API响应"
+            current_app.logger.error(f"无法解析API响应: {response_data}")
+            return "错误: 无法解析API响应"
 
         except Exception as e:
-            error_msg = f"Spark Practice API调用失败: {str(e)}"
+            error_msg = f"API调用失败: {str(e)}"
             current_app.logger.error(error_msg)
             if max_retries > 0:
                 current_app.logger.info(f"重试中... ({max_retries} 次剩余)")
@@ -106,7 +86,7 @@ class AIPracticeAPI():
             return error_msg
 
     @classmethod
-    def getInstance(cls) -> "AIPracticeAPI":
+    def getInstance(cls) -> "AIMbtiAPI":
         if cls._instance is None:
-            cls._instance = AIPracticeAPI()
+            cls._instance = AIMbtiAPI()
         return cls._instance
